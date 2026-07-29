@@ -168,3 +168,4 @@ C:\Users\adenu\Desktop\joo\dotnet\UserManagementApi\bin\Debug\net10.0\runtimes\w
 C:\Users\adenu\Desktop\joo\dotnet\UserManagementApi\bin\Debug\net10.0\runtimes\win-x86\native\Microsoft.Data.SqlClient.SNI.dll
 C:\Users\adenu\Desktop\joo\dotnet\UserManagementApi\bin\Debug\net10.0\Npgsql.dll
 C:\Users\adenu\Desktop\joo\dotnet\UserManagementApi\bin\Debug\net10.0\Npgsql.EntityFrameworkCore.PostgreSQL.dll
+C:\Users\adenu\Desktop\joo\dotnet\UserManagementApi\obj\Debug\net10.0\UserManagementApi.sourcelink.json
