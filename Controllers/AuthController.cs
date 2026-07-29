@@ -39,7 +39,12 @@ public class AuthController(
         var loginResult = await _authService.LoginAsync(request.Email, request.Password);
 
         if (!loginResult.Succeeded)
-            return Unauthorized();
+        {
+            return Unauthorized(new
+            {
+                errors = loginResult.Errors
+            });
+        }
 
         return Ok(loginResult.Data);
     }
