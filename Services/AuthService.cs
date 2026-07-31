@@ -58,19 +58,18 @@ public class AuthService(
     public async Task<ServiceResult<User>> CreateUserAsync(
         string email,
         string password,
-        string firstName,
-        string lastName)
+        string fullName,
+        string phoneNumber)
     {
         User user = new()
         {
             UserName = email,
             Email = email,
-            FirstName = firstName,
-            LastName = lastName,
+            FullName = fullName,
+            PhoneNumber = phoneNumber,
             CreatedAt = DateTime.UtcNow,
         };
 
-        Console.WriteLine($"Creating user: {user.Email}, Email: {user.Email}, FirstName: {user.FirstName}, LastName: {user.LastName}");
 
         var result = await _userManager
             .CreateAsync(user, password);

@@ -16,15 +16,16 @@ public class AuthController(
     private readonly TokenService _tokenService = tokenService;
     private readonly AuthService _authService = authService;
 
-    [HttpPost("register")]
-    public async Task<IActionResult> Register(
-        RegisterRequest request)
+    [HttpPost("signUp")]
+    public async Task<IActionResult> SignUp(
+        SignUpRequest request)
     {
         var result = await _authService.CreateUserAsync(
             request.Email,
             request.Password,
-            request.FirstName ?? string.Empty,
-            request.LastName ?? string.Empty);
+            request.FullName,
+            request.PhoneNumber);
+
         return Ok(new
         {
             message = "User created successfully"
