@@ -24,12 +24,11 @@ public class AuthController(
             request.Email,
             request.Password,
             request.FullName,
-            request.PhoneNumber);
+            request.PhoneNumber, request.UserName);
 
-        return Ok(new
-        {
-            message = "User created successfully"
-        });
+        return result.Succeeded
+            ? Ok(new { message = "User created successfully" })
+            : BadRequest(new { errors = result.Errors });
     }
 
 

@@ -1,0 +1,5 @@
+# ASP.NET Core configuration files
+appsettings.Development.json
+appsettings.Production.json
+appsettings.*.json
+appsettings.json

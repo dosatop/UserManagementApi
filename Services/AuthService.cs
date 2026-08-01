@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using UserManagementApi.Data;
+using UserManagementApi.DTOs.Auth.Roles;
 using UserManagementApi.Models;
 using UserManagementApi.Models.AuthModels;
 
@@ -7,11 +8,12 @@ namespace UserManagementApi.Services;
 
 public class AuthService(
     UserManager<User> userManager,
-    TokenService tokenService, ApplicationDbContext context)
+    TokenService tokenService, ApplicationDbContext context, RolesService roleService)
 {
     private readonly UserManager<User> _userManager = userManager;
     private readonly TokenService _tokenService = tokenService;
     private readonly ApplicationDbContext _context = context;
+    private readonly RolesService _roleService = roleService;
 
     public async Task<ServiceResult<TokenResponse>> LoginAsync(
         string email,
@@ -59,11 +61,19 @@ public class AuthService(
         string email,
         string password,
         string fullName,
-        string phoneNumber)
+        string phoneNumber, string? userName)
     {
+        var existingUser = await _userManager.FindByEmailAsync(email);
+
+        if (existingUser is not null)
+        {
+            return ServiceResult<User>.Failure(
+                ["Email is already registered"]);
+        }
+
         User user = new()
         {
-            UserName = email,
+            UserName = userName ?? email,
             Email = email,
             FullName = fullName,
             PhoneNumber = phoneNumber,
@@ -84,6 +94,8 @@ public class AuthService(
             return ServiceResult<User>.Failure(
                 result.Errors.Select(e => e.Description));
         }
+
+        await _roleService.AssignRoleToUserAsync(user, Roles.Student);
 
         return ServiceResult<User>.Success(user);
     }
