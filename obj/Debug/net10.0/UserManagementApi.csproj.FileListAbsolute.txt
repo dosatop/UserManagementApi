@@ -145,3 +145,4 @@ C:\Users\adenu\Desktop\joo\dotnet\UserManagementApi\obj\Debug\net10.0\refint\Use
 C:\Users\adenu\Desktop\joo\dotnet\UserManagementApi\obj\Debug\net10.0\UserManagementApi.pdb
 C:\Users\adenu\Desktop\joo\dotnet\UserManagementApi\obj\Debug\net10.0\UserManagementApi.genruntimeconfig.cache
 C:\Users\adenu\Desktop\joo\dotnet\UserManagementApi\obj\Debug\net10.0\ref\UserManagementApi.dll
+C:\Users\adenu\Desktop\joo\dotnet\UserManagementApi\bin\Debug\net10.0\Resend.dll

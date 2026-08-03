@@ -769,6 +769,19 @@
           }
         }
       },
+      "Resend/0.8.0": {
+        "type": "package",
+        "compile": {
+          "lib/net8.0/Resend.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/net8.0/Resend.dll": {
+            "related": ".xml"
+          }
+        }
+      },
       "Swashbuckle.AspNetCore/10.2.3": {
         "type": "package",
         "dependencies": {
@@ -2868,6 +2881,21 @@
         "postgresql.png"
       ]
     },
+    "Resend/0.8.0": {
+      "sha512": "xaG5Q19IbKQ/zEWZ2jviw7mvco6Irz6DuUgnU3YRrF2iCrLq2ADf6jkiGBVq/Xyuqk+2bWBuwGpQPeclfz0RWA==",
+      "type": "package",
+      "path": "resend/0.8.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "README.md",
+        "icon.png",
+        "lib/net8.0/Resend.dll",
+        "lib/net8.0/Resend.xml",
+        "resend.0.8.0.nupkg.sha512",
+        "resend.nuspec"
+      ]
+    },
     "Swashbuckle.AspNetCore/10.2.3": {
       "sha512": "8KNh1RWvofdU6DVLyBs4Z/OpUMnmf8oNvJQc0QxpwySRbi42bwLfdVMMrXZWANg5U5KQGQq1xW6r/hlcqw99tQ==",
       "type": "package",
@@ -3164,6 +3192,7 @@
       "Microsoft.AspNetCore.OpenApi >= 10.0.5",
       "Microsoft.EntityFrameworkCore.Tools >= 10.0.9",
       "Npgsql.EntityFrameworkCore.PostgreSQL >= 10.0.3",
+      "Resend >= 0.8.0",
       "Swashbuckle.AspNetCore >= 10.2.3"
     ]
   },
@@ -3239,6 +3268,10 @@
           "Npgsql.EntityFrameworkCore.PostgreSQL": {
             "target": "Package",
             "version": "[10.0.3, )"
+          },
+          "Resend": {
+            "target": "Package",
+            "version": "[0.8.0, )"
           },
           "Swashbuckle.AspNetCore": {
             "target": "Package",

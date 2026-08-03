@@ -18,7 +18,7 @@ UserService userService
     [HttpGet("profile")]
     public async Task<IActionResult> GetUserProfile()
     {
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var userId = _userService.GetUserId();
 
         if (userId is null)
         {

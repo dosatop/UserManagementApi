@@ -1,12 +1,45 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using UserManagementApi.DTOs.User;
 using UserManagementApi.Models;
 
 namespace UserManagementApi.Services;
 
-public class UserService(UserManager<User> userManager)
+public interface ICurrentUserService
+{
+    string? GetUserId();
+    string? GetEmail();
+    string? GetUsername();
+}
+
+public class UserService(UserManager<User> userManager, IHttpContextAccessor httpContextAccessor) : ICurrentUserService
 {
     private readonly UserManager<User> _userManager = userManager;
+    private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
+
+    public string? GetUserId()
+    {
+        return _httpContextAccessor.HttpContext?
+            .User
+            .FindFirst(ClaimTypes.NameIdentifier)?
+            .Value;
+    }
+
+    public string? GetEmail()
+    {
+        return _httpContextAccessor.HttpContext?
+            .User
+            .FindFirst(ClaimTypes.Email)?
+            .Value;
+    }
+
+    public string? GetUsername()
+    {
+        return _httpContextAccessor.HttpContext?
+            .User
+            .FindFirst(ClaimTypes.Name)?
+            .Value;
+    }
 
     public async Task<User?> GetUserByIdAsync(string userId)
     {
@@ -36,4 +69,7 @@ public class UserService(UserManager<User> userManager)
         };
 
     }
+
+
+
 }

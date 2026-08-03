@@ -7,6 +7,7 @@ using Microsoft.OpenApi;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Resend;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -69,10 +70,19 @@ builder.Services
         };
     });
 
+builder.Services.AddOptions();
+builder.Services.Configure<ResendClientOptions>(
+    builder.Configuration.GetSection("Resend"));
+
+builder.Services.AddHttpClient<ResendClient>();
+builder.Services.AddTransient<IResend, ResendClient>();
+
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<RolesService>();
 builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<ICurrentUserService, UserService>();
 
 var app = builder.Build();
 
@@ -86,7 +96,7 @@ using (var scope = app.Services.CreateScope())
 app.UseSwagger();
 app.UseSwaggerUI();
 
-app.UseHttpsRedirection();
+// app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
