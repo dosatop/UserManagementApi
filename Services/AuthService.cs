@@ -16,7 +16,7 @@ public class AuthService(
     private readonly ApplicationDbContext _context = context;
     private readonly RolesService _roleService = roleService;
 
-    public async Task<ServiceResult<TokenResponse>> LoginAsync(
+    public async Task<ServiceResult<LoginResponse>> LoginAsync(
         string email,
         string password)
     {
@@ -27,7 +27,7 @@ public class AuthService(
             .FindByEmailAsync(email);
 
         if (user is null)
-            return ServiceResult<TokenResponse>.Failure([
+            return ServiceResult<LoginResponse>.Failure([
                 new ServiceError {
                     Code = AuthErrorCodes.InvalidCredentials,
                     Message = "Invalid email or password"
@@ -40,7 +40,7 @@ public class AuthService(
                 .CheckPasswordAsync(user, password);
 
         if (!isPasswordValid)
-            return ServiceResult<TokenResponse>.Failure([
+            return ServiceResult<LoginResponse>.Failure([
                 new ServiceError
                 {
                     Code = AuthErrorCodes.InvalidCredentials,
@@ -65,13 +65,20 @@ public class AuthService(
     "User {UserId} logged in successfully",
     user.Id);
 
-        return ServiceResult<TokenResponse>.Success(
-            new TokenResponse
+        return ServiceResult<LoginResponse>.Success(
+            new LoginResponse
             {
-                AccessToken = accessToken.AccessToken,
-                RefreshToken = refreshToken.Token,
-                ExpiresAt = accessToken.ExpiresAt,
-                ExpiresIn = accessToken.ExpiresIn
+                Id = user.Id,
+                FullName = user.FullName,
+                Email = user.Email!,
+                PhoneNumber = user.PhoneNumber!,
+                TokenResponse = new TokenResponse
+                {
+                    AccessToken = accessToken.AccessToken,
+                    RefreshToken = refreshToken.Token,
+                    ExpiresAt = accessToken.ExpiresAt,
+                    ExpiresIn = accessToken.ExpiresIn
+                }
             });
     }
 
