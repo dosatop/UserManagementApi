@@ -23,21 +23,21 @@ public class RolesService
         }
     }
 
-    public async Task AssignRoleToUserAsync(User user, string role)
+    public async Task<IdentityResult> AssignRoleToUserAsync(User user, string role)
     {
         if (!await _roleManager.RoleExistsAsync(role))
         {
-            throw new InvalidOperationException($"Role '{role}' does not exist.");
+            return IdentityResult.Failed(new IdentityError { Description = $"Role '{role}' does not exist." });
         }
 
         var result = await _userManager.AddToRoleAsync(user, role);
 
         if (!result.Succeeded)
         {
-            throw new InvalidOperationException(
-                $"Failed to assign role '{role}' to user '{user.Email}': " +
-                string.Join(", ", result.Errors.Select(e => e.Description)));
+            return IdentityResult.Failed([.. result.Errors]);
         }
+
+        return IdentityResult.Success;
     }
 
 }

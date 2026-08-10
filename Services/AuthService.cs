@@ -3,12 +3,13 @@ using UserManagementApi.Data;
 using UserManagementApi.DTOs.Auth.Roles;
 using UserManagementApi.Models;
 using UserManagementApi.Models.AuthModels;
+using UserManagementApi.Models.ErrorModels;
 
 namespace UserManagementApi.Services;
 
 public class AuthService(
     UserManager<User> userManager,
-    TokenService tokenService, ApplicationDbContext context, RolesService roleService)
+    TokenService tokenService, ApplicationDbContext context, RolesService roleService, ILogger<AuthService> _logger)
 {
     private readonly UserManager<User> _userManager = userManager;
     private readonly TokenService _tokenService = tokenService;
@@ -19,12 +20,19 @@ public class AuthService(
         string email,
         string password)
     {
+        _logger.LogInformation(
+         "Login attempt");
 
         var user = await _userManager
             .FindByEmailAsync(email);
 
         if (user is null)
-            return ServiceResult<TokenResponse>.Failure(["Invalid email or password"]);
+            return ServiceResult<TokenResponse>.Failure([
+                new ServiceError {
+                    Code = AuthErrorCodes.InvalidCredentials,
+                    Message = "Invalid email or password"
+                }
+            ]);
 
 
         var isPasswordValid =
@@ -32,7 +40,13 @@ public class AuthService(
                 .CheckPasswordAsync(user, password);
 
         if (!isPasswordValid)
-            return ServiceResult<TokenResponse>.Failure(["Invalid email or password"]);
+            return ServiceResult<TokenResponse>.Failure([
+                new ServiceError
+                {
+                    Code = AuthErrorCodes.InvalidCredentials,
+                    Message = "Invalid email or password"
+                }
+            ]);
 
         var accessToken = await _tokenService.CreateAccessToken(user);
 
@@ -46,6 +60,10 @@ public class AuthService(
         _context.RefreshTokens.Add(refreshToken);
 
         await _context.SaveChangesAsync();
+
+        _logger.LogInformation(
+    "User {UserId} logged in successfully",
+    user.Id);
 
         return ServiceResult<TokenResponse>.Success(
             new TokenResponse
@@ -63,40 +81,86 @@ public class AuthService(
         string fullName,
         string phoneNumber, string? userName)
     {
-        var existingUser = await _userManager.FindByEmailAsync(email);
-
-        if (existingUser is not null)
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+        try
         {
-            return ServiceResult<User>.Failure(
-                ["Email is already registered"]);
-        }
+            var existingUser = await _userManager.FindByEmailAsync(email);
 
-        User user = new()
-        {
-            UserName = userName ?? email,
-            Email = email,
-            FullName = fullName,
-            PhoneNumber = phoneNumber,
-            CreatedAt = DateTime.UtcNow,
-        };
-
-
-        var result = await _userManager
-            .CreateAsync(user, password);
-
-        if (!result.Succeeded)
-        {
-            foreach (var error in result.Errors)
+            if (existingUser is not null)
             {
-                Console.WriteLine($"{error.Code}: {error.Description}");
+                await transaction.RollbackAsync();
+
+                return ServiceResult<User>.Failure(
+                    [new ServiceError
+                {
+                    Code = AuthErrorCodes.EmailAlreadyRegistered,
+                    Message = "Email already exist"
+                }
+                    ]);
             }
 
-            return ServiceResult<User>.Failure(
-                result.Errors.Select(e => e.Description));
+            User user = new()
+            {
+                UserName = userName ?? email,
+                Email = email,
+                FullName = fullName,
+                PhoneNumber = phoneNumber,
+                CreatedAt = DateTime.UtcNow,
+            };
+
+
+            var result = await _userManager
+                .CreateAsync(user, password);
+
+            if (!result.Succeeded)
+            {
+                await transaction.RollbackAsync();
+
+                foreach (var error in result.Errors)
+                {
+                    _logger.LogWarning("User creation failed. Code {Code}, Description: {Description}",
+                    error.Code,
+                    error.Description
+                    );
+                }
+
+                return ServiceResult<User>.Failure(
+                   [
+                    new ServiceError
+                {
+                    Code = AuthErrorCodes.UserCreationFailed,
+                    Message = "Unable to create user."
+                }
+                   ]);
+            }
+
+            var roleResult = await _roleService.AssignRoleToUserAsync(user, Roles.Student);
+
+            if (!roleResult.Succeeded)
+            {
+                await transaction.RollbackAsync();
+
+                _logger.LogError(
+                    "User {UserId} was created but assigning role {Role} failed",
+                    user.Id,
+                    Roles.Student);
+
+                return ServiceResult<User>.Failure([
+                   new ServiceError{
+                   Code = AuthErrorCodes.UserCreationFailed,
+                   Message = "Unable to assign default role to user"
+               }
+                ]);
+            }
+
+            await transaction.CommitAsync();
+
+            return ServiceResult<User>.Success(user);
         }
-
-        await _roleService.AssignRoleToUserAsync(user, Roles.Student);
-
-        return ServiceResult<User>.Success(user);
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            _logger.LogError(ex, "An error occurred while creating user {Email}", email); return ServiceResult<User>.Failure([new ServiceError { Code = AuthErrorCodes.UserCreationFailed, Message = "Unable to create user." }]);
+        }
     }
 }
