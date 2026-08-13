@@ -9,4 +9,15 @@ public interface IUserManagementService
         string email,
         string password,
                 string role);
+
+                Task<(
+            bool Success,
+            User? User,
+            string? Error
+            )> CreateSchoolAdminAsync(
+            Guid schoolId,
+            string fullName,
+            string email,
+            string phoneNumber,
+            string password);
 }
