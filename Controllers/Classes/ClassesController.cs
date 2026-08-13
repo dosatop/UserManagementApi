@@ -9,14 +9,9 @@ namespace UserManagementApi.Controllers;
 [ApiController]
 [Route("api/schools/{schoolId:guid}/classes")]
 [Authorize(Roles = Roles.Admin)]
-public class ClassesController : ControllerBase
+public class ClassesController(IClassService classService) : ControllerBase
 {
-    private readonly IClassService _classService;
-
-    public ClassesController(IClassService classService)
-    {
-        _classService = classService;
-    }
+    private readonly IClassService _classService = classService;
 
     [HttpPost]
     public async Task<IActionResult> CreateClass(

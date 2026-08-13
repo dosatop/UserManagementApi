@@ -9,14 +9,9 @@ namespace UserManagementApi.Controllers;
 [ApiController]
 [Route("api/schools/{schoolId:guid}/teachers")]
 [Authorize(Roles = Roles.Admin)]
-public class TeachersController : ControllerBase
+public class TeachersController(ITeacherService teacherService) : ControllerBase
 {
-    private readonly ITeacherService _teacherService;
-
-    public TeachersController(ITeacherService teacherService)
-    {
-        _teacherService = teacherService;
-    }
+    private readonly ITeacherService _teacherService = teacherService;
 
     [HttpPost]
     public async Task<IActionResult> CreateTeacher(
