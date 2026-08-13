@@ -64,8 +64,8 @@ public class AuthService(
         _logger.LogInformation(
     "User {UserId} logged in successfully",
     user.Id);
-            var roles = await _userManager.GetRolesAsync(user);
-            var role = roles.FirstOrDefault();
+        var roles = await _userManager.GetRolesAsync(user);
+        var role = roles.FirstOrDefault();
         return ServiceResult<LoginResponse>.Success(
             new LoginResponse
             {
@@ -74,6 +74,7 @@ public class AuthService(
                 Email = user.Email!,
                 PhoneNumber = user.PhoneNumber!,
                 Role = role!,
+                SchoolId = user.SchoolId,
                 TokenResponse = new TokenResponse
                 {
                     AccessToken = accessToken.AccessToken,
