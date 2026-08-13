@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Resend;
+using UserManagementApi.Services.Interfaces;
+using UserManagementApi.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -83,14 +85,50 @@ builder.Services.AddScoped<RolesService>();
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<ICurrentUserService, UserService>();
+builder.Services.AddScoped<IStudentService, StudentService>();
+builder.Services.AddScoped<ITeacherService, TeacherService>();
+builder.Services.AddScoped<IUserManagementService, UserManagementService>();
+builder.Services.AddScoped<ICurrentUserService, UserService>();
+builder.Services.AddScoped<
+    ITeacherClassService,
+    TeacherClassService>();
+builder.Services.AddScoped<
+ITeacherSubjectService,
+TeacherSubjectService>();
+builder.Services.AddScoped<
+    IClassService,
+    ClassService>();
+builder.Services.AddScoped<
+ISubjectService,
+SubjectService>();
+// builder.Services.AddScoped<
+// ITeacherAssignmentService,
+// TeacherAssignmentService>();
+builder.Services.AddScoped<
+IParentService,
+ParentService>();
+builder.Services.AddScoped<
+IParentPortalService,
+ParentPortalService>();
+builder.Services.AddScoped<
+IStudentPortalService,
+StudentPortalService>();
+builder.Services.AddScoped<
+IResultGradingService,
+ResultGradingService>();
+builder.Services.Configure<SeedAdminSettings>(
+    builder.Configuration.GetSection("SeedAdmin"));
 
 var app = builder.Build();
+
 
 using (var scope = app.Services.CreateScope())
 {
     var rolesService = scope.ServiceProvider.GetRequiredService<RolesService>();
 
-    await rolesService.EnsureRolesExistAsync();
+    // await rolesService.EnsureRolesExistAsync();
+    await IdentitySeeder.SeedAsync(
+        scope.ServiceProvider);
 }
 
 app.UseSwagger();

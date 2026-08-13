@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using UserManagementApi.Data;
@@ -11,9 +12,11 @@ using UserManagementApi.Data;
 namespace UserManagementApi.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260813065708_AddSchoolStructure")]
+    partial class AddSchoolStructure
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -154,81 +157,6 @@ namespace UserManagementApi.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
-            modelBuilder.Entity("ParentProfile", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("SchoolId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SchoolId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("ParentProfile");
-                });
-
-            modelBuilder.Entity("ParentStudent", b =>
-                {
-                    b.Property<Guid>("ParentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("StudentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ParentId1")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("ParentId", "StudentId");
-
-                    b.HasIndex("ParentId1");
-
-                    b.HasIndex("StudentId");
-
-                    b.ToTable("ParentStudents");
-                });
-
-            modelBuilder.Entity("StudentProfile", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ClassId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("SchoolId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("StudentNumber")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ClassId");
-
-                    b.HasIndex("UserId")
-                        .IsUnique();
-
-                    b.HasIndex("SchoolId", "StudentNumber")
-                        .IsUnique();
-
-                    b.ToTable("StudentProfiles");
-                });
-
             modelBuilder.Entity("UserManagementApi.Models.AuthModels.RefreshToken", b =>
                 {
                     b.Property<int>("Id")
@@ -310,59 +238,22 @@ namespace UserManagementApi.Migrations
                     b.ToTable("Parents");
                 });
 
-            modelBuilder.Entity("UserManagementApi.Models.Results.StudentResult", b =>
+            modelBuilder.Entity("UserManagementApi.Models.ParentStudent", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
+                    b.Property<Guid>("ParentId")
                         .HasColumnType("uuid");
-
-                    b.Property<Guid>("ClassId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<decimal?>("ExamScore")
-                        .HasColumnType("numeric");
-
-                    b.Property<string>("Remark")
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("SchoolId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("Score")
-                        .HasColumnType("numeric");
-
-                    b.Property<string>("Session")
-                        .IsRequired()
-                        .HasColumnType("text");
 
                     b.Property<Guid>("StudentId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("SubjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Term")
-                        .IsRequired()
+                    b.Property<string>("Relationship")
                         .HasColumnType("text");
 
-                    b.Property<decimal?>("TestScore")
-                        .HasColumnType("numeric");
+                    b.HasKey("ParentId", "StudentId");
 
-                    b.HasKey("Id");
+                    b.HasIndex("StudentId");
 
-                    b.HasIndex("ClassId");
-
-                    b.HasIndex("SchoolId");
-
-                    b.HasIndex("SubjectId");
-
-                    b.HasIndex("StudentId", "SubjectId", "Session", "Term")
-                        .IsUnique();
-
-                    b.ToTable("StudentResults");
+                    b.ToTable("ParentStudents");
                 });
 
             modelBuilder.Entity("UserManagementApi.Models.SchoolModels.School", b =>
@@ -390,6 +281,45 @@ namespace UserManagementApi.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Schools");
+                });
+
+            modelBuilder.Entity("UserManagementApi.Models.Student.SchoolStudent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ClassId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DateOfBirth")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Gender")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("SchoolId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("StudentNumber")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClassId");
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.HasIndex("SchoolId", "StudentNumber")
+                        .IsUnique();
+
+                    b.ToTable("Students");
                 });
 
             modelBuilder.Entity("UserManagementApi.Models.Subject", b =>
@@ -601,77 +531,6 @@ namespace UserManagementApi.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("ParentProfile", b =>
-                {
-                    b.HasOne("UserManagementApi.Models.SchoolModels.School", "School")
-                        .WithMany()
-                        .HasForeignKey("SchoolId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("UserManagementApi.Models.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("School");
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("ParentStudent", b =>
-                {
-                    b.HasOne("ParentProfile", "Parent")
-                        .WithMany("Children")
-                        .HasForeignKey("ParentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("UserManagementApi.Models.Parent", null)
-                        .WithMany("Children")
-                        .HasForeignKey("ParentId1")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("StudentProfile", "Student")
-                        .WithMany("Parents")
-                        .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Parent");
-
-                    b.Navigation("Student");
-                });
-
-            modelBuilder.Entity("StudentProfile", b =>
-                {
-                    b.HasOne("UserManagementApi.Models.Class", "Class")
-                        .WithMany("Students")
-                        .HasForeignKey("ClassId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .IsRequired();
-
-                    b.HasOne("UserManagementApi.Models.SchoolModels.School", "School")
-                        .WithMany()
-                        .HasForeignKey("SchoolId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("UserManagementApi.Models.User", "User")
-                        .WithOne("Student")
-                        .HasForeignKey("StudentProfile", "UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Class");
-
-                    b.Navigation("School");
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("UserManagementApi.Models.AuthModels.RefreshToken", b =>
                 {
                     b.HasOne("UserManagementApi.Models.User", "User")
@@ -713,13 +572,31 @@ namespace UserManagementApi.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("UserManagementApi.Models.Results.StudentResult", b =>
+            modelBuilder.Entity("UserManagementApi.Models.ParentStudent", b =>
+                {
+                    b.HasOne("UserManagementApi.Models.Parent", "Parent")
+                        .WithMany("Children")
+                        .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("UserManagementApi.Models.Student.SchoolStudent", "Student")
+                        .WithMany("Parents")
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Parent");
+
+                    b.Navigation("Student");
+                });
+
+            modelBuilder.Entity("UserManagementApi.Models.Student.SchoolStudent", b =>
                 {
                     b.HasOne("UserManagementApi.Models.Class", "Class")
-                        .WithMany()
+                        .WithMany("Students")
                         .HasForeignKey("ClassId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("UserManagementApi.Models.SchoolModels.School", "School")
                         .WithMany()
@@ -727,25 +604,17 @@ namespace UserManagementApi.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("StudentProfile", "Student")
-                        .WithMany()
-                        .HasForeignKey("StudentId")
+                    b.HasOne("UserManagementApi.Models.User", "User")
+                        .WithOne("Student")
+                        .HasForeignKey("UserManagementApi.Models.Student.SchoolStudent", "UserId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("UserManagementApi.Models.Subject", "Subject")
-                        .WithMany()
-                        .HasForeignKey("SubjectId")
-                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Class");
 
                     b.Navigation("School");
 
-                    b.Navigation("Student");
-
-                    b.Navigation("Subject");
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("UserManagementApi.Models.Subject", b =>
@@ -826,16 +695,6 @@ namespace UserManagementApi.Migrations
                     b.Navigation("School");
                 });
 
-            modelBuilder.Entity("ParentProfile", b =>
-                {
-                    b.Navigation("Children");
-                });
-
-            modelBuilder.Entity("StudentProfile", b =>
-                {
-                    b.Navigation("Parents");
-                });
-
             modelBuilder.Entity("UserManagementApi.Models.Class", b =>
                 {
                     b.Navigation("Students");
@@ -855,6 +714,11 @@ namespace UserManagementApi.Migrations
                     b.Navigation("Subjects");
 
                     b.Navigation("Users");
+                });
+
+            modelBuilder.Entity("UserManagementApi.Models.Student.SchoolStudent", b =>
+                {
+                    b.Navigation("Parents");
                 });
 
             modelBuilder.Entity("UserManagementApi.Models.Subject", b =>

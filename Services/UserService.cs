@@ -17,6 +17,75 @@ public class UserService(UserManager<User> userManager, IHttpContextAccessor htt
     private readonly UserManager<User> _userManager = userManager;
     private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
 
+    public async Task<(bool Success, User? User, string? Error)>
+      CreateUserAsync(
+          string fullName,
+          string email,
+          string password,
+          string role)
+    {
+        var existingUser = await _userManager.FindByEmailAsync(email);
+
+        if (existingUser != null)
+        {
+            return (
+                false,
+                null,
+                "A user with this email already exists."
+            );
+        }
+
+        var user = new User
+        {
+            UserName = email,
+            Email = email,
+            FullName = fullName,
+            EmailConfirmed = true
+        };
+
+        var result = await _userManager.CreateAsync(
+            user,
+            password);
+
+        if (!result.Succeeded)
+        {
+            var errors = string.Join(
+                ", ",
+                result.Errors.Select(x => x.Description));
+
+            return (
+                false,
+                null,
+                errors
+            );
+        }
+
+        var roleResult = await _userManager.AddToRoleAsync(
+            user,
+            role);
+
+        if (!roleResult.Succeeded)
+        {
+            await _userManager.DeleteAsync(user);
+
+            var errors = string.Join(
+                ", ",
+                roleResult.Errors.Select(x => x.Description));
+
+            return (
+                false,
+                null,
+                errors
+            );
+        }
+
+        return (
+            true,
+            user,
+            null
+        );
+    }
+
     public string? GetUserId()
     {
         return _httpContextAccessor.HttpContext?

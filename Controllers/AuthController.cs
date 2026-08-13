@@ -1,7 +1,5 @@
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using UserManagementApi.DTOs.Auth;
-using UserManagementApi.Models;
 using UserManagementApi.Services;
 
 namespace UserManagementApi.Controllers;
@@ -9,43 +7,26 @@ namespace UserManagementApi.Controllers;
 [ApiController]
 [Route("api/auth")]
 public class AuthController(
-    UserManager<User> userManager,
-    TokenService tokenService, AuthService authService) : ControllerBase
+    AuthService authService) : ControllerBase
 {
-    private readonly UserManager<User> _userManager = userManager;
-    private readonly TokenService _tokenService = tokenService;
     private readonly AuthService _authService = authService;
-
-    [HttpPost("signUp")]
-    public async Task<IActionResult> SignUp(
-        SignUpRequest request)
-    {
-        var result = await _authService.CreateUserAsync(
-            request.Email,
-            request.Password,
-            request.FullName,
-            request.PhoneNumber, request.UserName);
-
-        return result.Succeeded
-            ? Ok(new { message = "User created successfully" })
-            : BadRequest(new { errors = result.Errors });
-    }
-
 
     [HttpPost("login")]
     public async Task<IActionResult> Login(
-        LoginRequest request)
+        [FromBody] LoginRequest request)
     {
-        var loginResult = await _authService.LoginAsync(request.Email, request.Password);
+        var result = await _authService.LoginAsync(
+            request.Email,
+            request.Password);
 
-        if (!loginResult.Succeeded)
+        if (!result.Succeeded)
         {
             return Unauthorized(new
             {
-                errors = loginResult.Errors
+                errors = result.Errors
             });
         }
 
-        return Ok(loginResult.Data);
+        return Ok(result.Data);
     }
 }
