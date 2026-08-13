@@ -64,10 +64,51 @@ public class SchoolsController(
     [HttpGet]
     public async Task<IActionResult> GetSchools()
     {
+
         var schools = await _context.Schools
-            .AsNoTracking()
-            .OrderBy(s => s.Name)
-            .ToListAsync();
+         .AsNoTracking()
+         .OrderBy(s => s.Name)
+         .Select(s => new
+         {
+             s.Id,
+             s.Name,
+             s.Address,
+             s.Email,
+             s.PhoneNumber,
+
+             // All users belonging to this school
+             UserCount = _context.Users
+                 .Count(u => u.SchoolId == s.Id),
+
+             // School administrators
+             AdminCount = (
+                 from user in _context.Users
+                 join userRole in _context.UserRoles
+                     on user.Id equals userRole.UserId
+                 join role in _context.Roles
+                     on userRole.RoleId equals role.Id
+                 where user.SchoolId == s.Id
+                       && role.Name == Roles.Admin
+                 select user.Id
+             ).Count(),
+
+             // Teachers
+             TeacherCount = _context.Teachers
+                 .Count(t => t.SchoolId == s.Id),
+
+             // Students
+             StudentCount = _context.StudentProfiles
+                 .Count(st => st.SchoolId == s.Id),
+
+             // Classes
+             ClassCount = _context.Classes
+                 .Count(c => c.SchoolId == s.Id),
+
+             // Subjects
+             SubjectCount = _context.Subjects
+                 .Count(sub => sub.SchoolId == s.Id)
+         })
+         .ToListAsync();
 
         return Ok(schools);
     }
@@ -246,7 +287,7 @@ public class SchoolsController(
 
         return Ok(admins);
     }
-    
+
     [Authorize(Roles = Roles.SuperAdmin)]
     [Authorize]
     [HttpGet("debug-auth")]
