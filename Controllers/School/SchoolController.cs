@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using UserManagementApi.Data;
 using UserManagementApi.DTOs.Auth.Roles;
+using UserManagementApi.DTOs.Users;
 using UserManagementApi.Models;
 using UserManagementApi.Models.SchoolModels;
 
