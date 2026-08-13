@@ -20,7 +20,7 @@ public class SchoolsController(
 
     // Create a school
     // Ideally this should eventually be SuperAdmin only.
-    [Authorize(Roles = Roles.Admin)]
+    [Authorize(Roles = Roles.SuperAdmin)]
     [HttpPost]
     public async Task<IActionResult> CreateSchool(
         CreateSchoolRequest request)
@@ -58,7 +58,7 @@ public class SchoolsController(
     }
 
     // Get schools
-    [Authorize(Roles = Roles.Admin)]
+    [Authorize(Roles = Roles.SuperAdmin)]
     [HttpGet]
     public async Task<IActionResult> GetSchools()
     {
@@ -86,15 +86,114 @@ public class SchoolsController(
 
         return Ok(school);
     }
-}
 
-public class CreateSchoolRequest
+    [Authorize(Roles = Roles.SuperAdmin)]
+[HttpPost("{schoolId:guid}/admin")]
+public async Task<IActionResult> CreateSchoolAdmin(
+    Guid schoolId,
+    CreateSchoolAdminRequest request)
 {
-    public string Name { get; set; } = string.Empty;
+    if (string.IsNullOrWhiteSpace(request.FullName))
+    {
+        return BadRequest(new
+        {
+            message = "Full name is required."
+        });
+    }
 
-    public string Address { get; set; } = string.Empty;
+    if (string.IsNullOrWhiteSpace(request.Email))
+    {
+        return BadRequest(new
+        {
+            message = "Email is required."
+        });
+    }
 
-    public string? Email { get; set; }
+    if (string.IsNullOrWhiteSpace(request.Password))
+    {
+        return BadRequest(new
+        {
+            message = "Password is required."
+        });
+    }
 
-    public string? PhoneNumber { get; set; }
+    // Check school
+    var school = await _context.Schools
+        .FirstOrDefaultAsync(x => x.Id == schoolId);
+
+    if (school == null)
+    {
+        return NotFound(new
+        {
+            message = "School not found."
+        });
+    }
+
+    // Check if email already exists
+    var existingUser =
+        await _userManager.FindByEmailAsync(request.Email);
+
+    if (existingUser != null)
+    {
+        return BadRequest(new
+        {
+            message = "A user with this email already exists."
+        });
+    }
+
+    var user = new User
+    {
+        Id = Guid.NewGuid().ToString(),
+        UserName = request.Email,
+        Email = request.Email,
+        FullName = request.FullName,
+        PhoneNumber = request.PhoneNumber,
+        SchoolId = schoolId,
+        EmailConfirmed = false
+    };
+
+    var createResult =
+        await _userManager.CreateAsync(
+            user,
+            request.Password);
+
+    if (!createResult.Succeeded)
+    {
+        return BadRequest(new
+        {
+            errors = createResult.Errors
+                .Select(x => x.Description)
+        });
+    }
+
+    var roleResult =
+        await _userManager.AddToRoleAsync(
+            user,
+            Roles.Admin);
+
+    if (!roleResult.Succeeded)
+    {
+        await _userManager.DeleteAsync(user);
+
+        return BadRequest(new
+        {
+            errors = roleResult.Errors
+                .Select(x => x.Description)
+        });
+    }
+
+    return Ok(new
+    {
+        message = "School admin created successfully.",
+        admin = new
+        {
+            user.Id,
+            user.FullName,
+            user.Email,
+            user.PhoneNumber,
+            user.SchoolId,
+            Role = Roles.Admin
+        }
+    });
+}
 }
