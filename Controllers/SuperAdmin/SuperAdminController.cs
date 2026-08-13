@@ -16,9 +16,10 @@ public class SuperAdminController(
     private readonly IUserManagementService
         _userManagementService = userManagementService;
 
-    [HttpPost("admins")]
+    [HttpPost("schools/{schoolId:guid}/admin")]
     public async Task<IActionResult> CreateSchoolAdmin(
-        CreateSchoolAdminRequest request)
+     Guid schoolId,
+     CreateSchoolAdminRequest request)
     {
         if (!ModelState.IsValid)
         {
@@ -27,7 +28,7 @@ public class SuperAdminController(
 
         var result =
             await _userManagementService.CreateSchoolAdminAsync(
-                request.SchoolId,
+                schoolId,
                 request.FullName,
                 request.Email,
                 request.PhoneNumber,

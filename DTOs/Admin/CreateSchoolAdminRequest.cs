@@ -2,8 +2,6 @@ namespace UserManagementApi.DTOs.Users;
 
 public class CreateSchoolAdminRequest
 {
-    public Guid SchoolId { get; set; }
-
     public string FullName { get; set; } = string.Empty;
 
     public string Email { get; set; } = string.Empty;
