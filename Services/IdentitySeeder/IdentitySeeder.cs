@@ -26,6 +26,7 @@ public static class IdentitySeeder
         // Create roles
         string[] roles =
         {
+            Roles.SuperAdmin,
             Roles.Admin,
             Roles.Teacher,
             Roles.Student,
@@ -88,12 +89,12 @@ public static class IdentitySeeder
         // Make sure admin has Admin role
         if (!await userManager.IsInRoleAsync(
                 admin,
-                Roles.Admin))
+                Roles.SuperAdmin))
         {
             var result =
                 await userManager.AddToRoleAsync(
                     admin,
-                    Roles.Admin);
+                    Roles.SuperAdmin);
 
             if (!result.Succeeded)
             {
