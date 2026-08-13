@@ -10,7 +10,7 @@ namespace UserManagementApi.Controllers;
 [Route(
     "api/schools/{schoolId:guid}/teachers/{teacherId:guid}/classes"
 )]
-[Authorize(Roles = Roles.Admin)]
+[Authorize(Roles = $"{Roles.SuperAdmin},{Roles.Admin}")]
 public class TeacherClassesController : ControllerBase
 {
     private readonly ITeacherClassService _teacherClassService;

@@ -4,7 +4,7 @@ using UserManagementApi.DTOs.Auth.Roles;
 
 [ApiController]
 [Route("api/schools/{schoolId:guid}/students")]
-[Authorize(Roles = Roles.Admin)]
+[Authorize(Roles = $"{Roles.SuperAdmin},{Roles.Admin}")]
 public class StudentsController : ControllerBase
 {
     private readonly IStudentService _studentService;

@@ -73,7 +73,7 @@ public class SchoolsController(
     }
 
     // Get one school
-    [Authorize]
+    [Authorize(Roles = Roles.SuperAdmin)]
     [HttpGet("{schoolId:guid}")]
     public async Task<IActionResult> GetSchool(Guid schoolId)
     {
@@ -246,7 +246,8 @@ public class SchoolsController(
 
         return Ok(admins);
     }
-
+    
+    [Authorize(Roles = Roles.SuperAdmin)]
     [Authorize]
     [HttpGet("debug-auth")]
     public IActionResult DebugAuth()

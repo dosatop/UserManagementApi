@@ -8,7 +8,7 @@ namespace UserManagementApi.Controllers;
 
 [ApiController]
 [Route("api/schools/{schoolId:guid}/parents")]
-[Authorize(Roles = Roles.Admin)]
+[Authorize(Roles = $"{Roles.SuperAdmin},{Roles.Admin}")]
 public class ParentsController(
     IParentService parentService) : ControllerBase
 {

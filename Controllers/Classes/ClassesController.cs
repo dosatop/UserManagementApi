@@ -8,7 +8,7 @@ namespace UserManagementApi.Controllers;
 
 [ApiController]
 [Route("api/schools/{schoolId:guid}/classes")]
-[Authorize(Roles = Roles.Admin)]
+[Authorize(Roles = $"{Roles.SuperAdmin},{Roles.Admin}")]
 public class ClassesController(IClassService classService) : ControllerBase
 {
     private readonly IClassService _classService = classService;

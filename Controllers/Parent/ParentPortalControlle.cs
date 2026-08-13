@@ -8,7 +8,7 @@ namespace UserManagementApi.Controllers;
 
 [ApiController]
 [Route("api/parent")]
-[Authorize(Roles = Roles.Parent)]
+[Authorize(Roles = $"{Roles.SuperAdmin},{Roles.Parent}")]
 public class ParentController : ControllerBase
 {
     private readonly IParentPortalService _parentService;

@@ -8,7 +8,7 @@ namespace UserManagementApi.Controllers;
 
 [ApiController]
 [Route("api/student")]
-[Authorize(Roles = Roles.Student)]
+[Authorize(Roles = $"{Roles.SuperAdmin},{Roles.Student}")]
 public class StudentController : ControllerBase
 {
     private readonly IStudentPortalService _studentService;
