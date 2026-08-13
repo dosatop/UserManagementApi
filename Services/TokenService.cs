@@ -16,16 +16,23 @@ public class TokenService(IConfiguration configuration, UserManager<User> userMa
 
     public async Task<AccessTokenResponse> CreateAccessToken(User user)
     {
-        var claims = new List<Claim>
-        {
-        new (ClaimTypes.NameIdentifier, user.Id),
-        new (ClaimTypes.Email, user.Email ?? ""),
-        new (ClaimTypes.Name, user.UserName ?? ""),
-        new(
-            "uuid",
-            Guid.NewGuid().ToString())
-        };
+       var claims = new List<Claim>
+{
+    new(ClaimTypes.NameIdentifier, user.Id),
+    new(ClaimTypes.Email, user.Email ?? ""),
+    new(ClaimTypes.Name, user.UserName ?? ""),
+    new("uuid", Guid.NewGuid().ToString())
+};
 
+if (user.SchoolId.HasValue)
+{
+    claims.Add(
+        new Claim(
+            "SchoolId",
+            user.SchoolId.Value.ToString()
+        )
+    );
+}
         var roles = await _userManager.GetRolesAsync(user);
 
         foreach (var role in roles)
