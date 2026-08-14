@@ -116,6 +116,9 @@ StudentPortalService>();
 builder.Services.AddScoped<
 IResultGradingService,
 ResultGradingService>();
+builder.Services.AddScoped<
+    ITeacherPortalService,
+    TeacherPortalService>();
 builder.Services.AddScoped<ITeacherPortalService, TeacherPortalService>();
 builder.Services.Configure<SeedAdminSettings>(
     builder.Configuration.GetSection("SeedAdmin"));

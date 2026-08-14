@@ -312,5 +312,108 @@ public class ApplicationDbContext(
                 x.SchoolId,
                 x.IsCurrent
             });
-    }
+
+        // ================================================================
+        // ASSIGNMENTS
+        // ================================================================
+
+        builder.Entity<Assignment>()
+            .HasOne(x => x.School)
+            .WithMany()
+            .HasForeignKey(x => x.SchoolId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<Assignment>()
+            .HasOne(x => x.Teacher)
+            .WithMany()
+            .HasForeignKey(x => x.TeacherId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<Assignment>()
+            .HasOne(x => x.Class)
+            .WithMany()
+            .HasForeignKey(x => x.ClassId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<Assignment>()
+            .HasOne(x => x.Subject)
+            .WithMany()
+            .HasForeignKey(x => x.SubjectId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+
+        // ================================================================
+        // ASSIGNMENT SUBMISSIONS
+        // ================================================================
+
+        builder.Entity<AssignmentSubmission>()
+            .HasOne(x => x.Assignment)
+            .WithMany(x => x.Submissions)
+            .HasForeignKey(x => x.AssignmentId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<AssignmentSubmission>()
+            .HasOne(x => x.Student)
+            .WithMany()
+            .HasForeignKey(x => x.StudentId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // One student can submit an assignment only once.
+        builder.Entity<AssignmentSubmission>()
+            .HasIndex(x => new
+            {
+                x.AssignmentId,
+                x.StudentId
+            })
+            .IsUnique();
+
+
+        // ================================================================
+        // ATTENDANCE
+        // ================================================================
+
+        builder.Entity<AttendanceRecord>()
+            .HasOne(x => x.School)
+            .WithMany()
+            .HasForeignKey(x => x.SchoolId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<AttendanceRecord>()
+            .HasOne(x => x.Student)
+            .WithMany()
+            .HasForeignKey(x => x.StudentId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<AttendanceRecord>()
+            .HasOne(x => x.Class)
+            .WithMany()
+            .HasForeignKey(x => x.ClassId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<AttendanceRecord>()
+            .HasOne(x => x.Teacher)
+            .WithMany()
+            .HasForeignKey(x => x.TeacherId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<AttendanceRecord>()
+            .HasOne(x => x.Subject)
+            .WithMany()
+            .HasForeignKey(x => x.SubjectId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<AttendanceRecord>()
+        .HasIndex(x => new
+        {
+            x.StudentId,
+            x.ClassId,
+            x.SubjectId,
+            x.AttendanceDate,
+            x.Session,
+            x.Term
+        })
+        .IsUnique();
+            }
+
+
 }
