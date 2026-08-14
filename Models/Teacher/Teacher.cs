@@ -1,3 +1,5 @@
+using UserManagementApi.Models.Assignments;
+using UserManagementApi.Models.Attendance;
 using UserManagementApi.Models.SchoolModels;
 
 namespace UserManagementApi.Models;
@@ -6,21 +8,45 @@ public class Teacher
 {
     public Guid Id { get; set; }
 
-    // Login account
+    // ============================================================
+    // LOGIN ACCOUNT
+    // ============================================================
+
     public string UserId { get; set; } = string.Empty;
 
     public User User { get; set; } = null!;
 
-    // School
+    // ============================================================
+    // SCHOOL
+    // ============================================================
+
     public Guid SchoolId { get; set; }
 
     public School School { get; set; } = null!;
 
     public string EmployeeNumber { get; set; } = string.Empty;
 
-    // Classes assigned to teacher
+    // ============================================================
+    // CLASSES ASSIGNED TO TEACHER
+    // ============================================================
+
     public ICollection<TeacherClass> TeacherClasses { get; set; } = [];
 
-    // Subjects taught
+    // ============================================================
+    // SUBJECTS TAUGHT
+    // ============================================================
+
     public ICollection<TeacherSubject> TeacherSubjects { get; set; } = [];
+
+    // ============================================================
+    // ASSIGNMENTS CREATED
+    // ============================================================
+
+    public ICollection<Assignment> Assignments { get; set; } = [];
+
+    // ============================================================
+    // ATTENDANCE COLLECTED
+    // ============================================================
+
+    public ICollection<AttendanceRecord> AttendanceRecords { get; set; } = [];
 }

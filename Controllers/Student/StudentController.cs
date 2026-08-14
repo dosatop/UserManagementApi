@@ -134,4 +134,220 @@ public class StudentController : ControllerBase
 
         return Ok(result.Data);
     }
+
+    // ============================================================
+    // ATTENDANCE
+    // ============================================================
+
+    [HttpGet("attendance")]
+    public async Task<IActionResult> GetAttendance(
+        [FromQuery] string session,
+        [FromQuery] string term)
+    {
+        if (string.IsNullOrWhiteSpace(session))
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Session is required."
+            });
+        }
+
+        if (string.IsNullOrWhiteSpace(term))
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Term is required."
+            });
+        }
+
+        var userId = GetUserId();
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Unauthorized(new
+            {
+                success = false,
+                message = "User identity not found."
+            });
+        }
+
+        var result =
+            await _studentService.GetAttendanceAsync(
+                userId,
+                session,
+                term);
+
+        if (!result.Success)
+        {
+            return NotFound(new
+            {
+                success = false,
+                message = result.Error
+            });
+        }
+
+        return Ok(new
+        {
+            success = true,
+            data = result.Data
+        });
+    }
+
+    // ============================================================
+    // ASSIGNMENTS
+    // ============================================================
+
+    [HttpGet("assignments")]
+    public async Task<IActionResult> GetAssignments(
+        [FromQuery] string session,
+        [FromQuery] string term)
+    {
+        if (string.IsNullOrWhiteSpace(session))
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Session is required."
+            });
+        }
+
+        if (string.IsNullOrWhiteSpace(term))
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Term is required."
+            });
+        }
+
+        var userId = GetUserId();
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Unauthorized(new
+            {
+                success = false,
+                message = "User identity not found."
+            });
+        }
+
+        var result =
+            await _studentService.GetAssignmentsAsync(
+                userId,
+                session,
+                term);
+
+        if (!result.Success)
+        {
+            return NotFound(new
+            {
+                success = false,
+                message = result.Error
+            });
+        }
+
+        return Ok(new
+        {
+            success = true,
+            data = result.Data
+        });
+    }
+
+    // ============================================================
+    // SINGLE ASSIGNMENT
+    // ============================================================
+
+    [HttpGet("assignments/{assignmentId:guid}")]
+    public async Task<IActionResult> GetAssignment(
+        Guid assignmentId)
+    {
+        var userId = GetUserId();
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Unauthorized(new
+            {
+                success = false,
+                message = "User identity not found."
+            });
+        }
+
+        var result =
+            await _studentService.GetAssignmentAsync(
+                userId,
+                assignmentId);
+
+        if (!result.Success)
+        {
+            return NotFound(new
+            {
+                success = false,
+                message = result.Error
+            });
+        }
+
+        return Ok(new
+        {
+            success = true,
+            data = result.Data
+        });
+    }
+
+    // ============================================================
+    // SUBMIT ASSIGNMENT
+    // ============================================================
+
+    [HttpPost("assignments/{assignmentId:guid}/submit")]
+    public async Task<IActionResult> SubmitAssignment(
+        Guid assignmentId,
+        [FromBody] SubmitAssignmentRequest request)
+    {
+        var userId = GetUserId();
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Unauthorized(new
+            {
+                success = false,
+                message = "User identity not found."
+            });
+        }
+
+        if (string.IsNullOrWhiteSpace(request.SubmissionText) &&
+            string.IsNullOrWhiteSpace(request.AttachmentUrl))
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message =
+                    "Please provide submission text or an attachment."
+            });
+        }
+
+        var result =
+            await _studentService.SubmitAssignmentAsync(
+                userId,
+                assignmentId,
+                request.SubmissionText,
+                request.AttachmentUrl);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = result.Error
+            });
+        }
+
+        return Ok(new
+        {
+            success = true,
+            message = "Assignment submitted successfully.",
+            data = result.Data
+        });
+    }
+
 }

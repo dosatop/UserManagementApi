@@ -24,9 +24,10 @@ public class TeacherClassService : ITeacherClassService
     {
         // Check teacher
         var teacher = await _context.Teachers
-            .FirstOrDefaultAsync(x =>
-                x.Id == teacherId &&
-                x.SchoolId == schoolId);
+     .Include(x => x.User)
+     .FirstOrDefaultAsync(x =>
+         x.Id == teacherId &&
+         x.SchoolId == schoolId);
 
         if (teacher == null)
         {

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using UserManagementApi.Data;
 using UserManagementApi.DTOs.Auth.Roles;
+using UserManagementApi.Models;
 using UserManagementApi.Services.Interfaces;
 
 public class StudentService : IStudentService

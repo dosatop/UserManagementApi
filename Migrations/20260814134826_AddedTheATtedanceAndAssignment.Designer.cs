@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using UserManagementApi.Data;
@@ -11,9 +12,11 @@ using UserManagementApi.Data;
 namespace UserManagementApi.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260814134826_AddedTheATtedanceAndAssignment")]
+    partial class AddedTheATtedanceAndAssignment
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -260,7 +263,7 @@ namespace UserManagementApi.Migrations
 
                     b.HasIndex("TeacherId");
 
-                    b.ToTable("Assignments");
+                    b.ToTable("Assignment");
                 });
 
             modelBuilder.Entity("UserManagementApi.Models.Assignments.AssignmentSubmission", b =>
@@ -308,7 +311,7 @@ namespace UserManagementApi.Migrations
 
                     b.HasIndex("StudentId");
 
-                    b.ToTable("AssignmentSubmissions");
+                    b.ToTable("AssignmentSubmission");
                 });
 
             modelBuilder.Entity("UserManagementApi.Models.AttendanceRecord", b =>
@@ -367,7 +370,7 @@ namespace UserManagementApi.Migrations
 
                     b.HasIndex("TeacherId");
 
-                    b.ToTable("AttendanceRecords");
+                    b.ToTable("AttendanceRecord");
                 });
 
             modelBuilder.Entity("UserManagementApi.Models.AuthModels.RefreshToken", b =>

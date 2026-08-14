@@ -13,6 +13,378 @@ public class ResultImportService(
     private readonly ApplicationDbContext _context = context;
     private readonly IResultGradingService _gradingService = gradingService;
 
+    private static string CalculateGrade(decimal score)
+    {
+        return score switch
+        {
+            >= 70 => "A",
+            >= 60 => "B",
+            >= 50 => "C",
+            >= 45 => "D",
+            >= 40 => "E",
+            _ => "F"
+        };
+    }
+
+    public async Task<(bool Success, object? Data, string? Error)>
+    CreateAsync(
+        Guid schoolId,
+        CreateResultRequest request)
+    {
+        // Validate student
+        var student = await _context.StudentProfiles
+            .AsNoTracking()
+            .Include(x => x.User)
+            .FirstOrDefaultAsync(x =>
+                x.Id == request.StudentId &&
+                x.SchoolId == schoolId);
+
+        if (student == null)
+        {
+            return (
+                false,
+                null,
+                "Student not found in this school."
+            );
+        }
+
+        // Validate subject
+        var subject = await _context.Subjects
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.Id == request.SubjectId &&
+                x.SchoolId == schoolId);
+
+        if (subject == null)
+        {
+            return (
+                false,
+                null,
+                "Subject not found in this school."
+            );
+        }
+
+        // Validate class
+        var classroom = await _context.Classes
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.Id == request.ClassId &&
+                x.SchoolId == schoolId);
+
+        if (classroom == null)
+        {
+            return (
+                false,
+                null,
+                "Class not found in this school."
+            );
+        }
+
+        // Check duplicate result
+        var exists = await _context.StudentResults
+            .AnyAsync(x =>
+                x.StudentId == request.StudentId &&
+                x.SubjectId == request.SubjectId &&
+                x.ClassId == request.ClassId &&
+                x.Session == request.Session &&
+                x.Term == request.Term &&
+                x.SchoolId == schoolId);
+
+        if (exists)
+        {
+            return (
+                false,
+                null,
+                "A result already exists for this student, subject, session and term."
+            );
+        }
+
+        var result = new StudentResult
+        {
+            Id = Guid.NewGuid(),
+
+            StudentId = request.StudentId,
+            SubjectId = request.SubjectId,
+            ClassId = request.ClassId,
+            SchoolId = schoolId,
+
+            Session = request.Session,
+            Term = request.Term,
+
+            Score = request.Score,
+            ExamScore = request.ExamScore,
+            TestScore = request.TestScore,
+
+            Grade = CalculateGrade(request.Score),
+
+            Remark = request.Remark,
+
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.StudentResults.Add(result);
+
+        await _context.SaveChangesAsync();
+
+        return (
+            true,
+            new
+            {
+                resultId = result.Id,
+
+                studentId = student.Id,
+                studentName = student.User.FullName,
+
+                subjectId = subject.Id,
+                subjectName = subject.Name,
+
+                classId = classroom.Id,
+                className = classroom.Name,
+
+                schoolId,
+
+                result.Session,
+                result.Term,
+                result.Score,
+                result.ExamScore,
+                result.TestScore,
+                result.Grade,
+                result.Remark,
+                result.CreatedAt
+            },
+            null
+        );
+    }
+
+    public async Task<(bool Success, object? Data, string? Error)>
+  GetAsync(
+      Guid schoolId,
+      GetResultsRequest request)
+    {
+        var query = _context.StudentResults
+            .AsNoTracking()
+            .Where(x => x.SchoolId == schoolId);
+
+        // ============================================================
+        // FILTER BY STUDENT
+        // ============================================================
+
+        if (request.StudentId.HasValue)
+        {
+            query = query.Where(x =>
+                x.StudentId == request.StudentId.Value);
+        }
+
+        // ============================================================
+        // FILTER BY SUBJECT
+        // ============================================================
+
+        if (request.SubjectId.HasValue)
+        {
+            query = query.Where(x =>
+                x.SubjectId == request.SubjectId.Value);
+        }
+
+        // ============================================================
+        // FILTER BY CLASS
+        // ============================================================
+
+        if (request.ClassId.HasValue)
+        {
+            query = query.Where(x =>
+                x.ClassId == request.ClassId.Value);
+        }
+
+        // ============================================================
+        // FILTER BY SESSION
+        // ============================================================
+
+        if (!string.IsNullOrWhiteSpace(request.Session))
+        {
+            query = query.Where(x =>
+                x.Session == request.Session);
+        }
+
+        // ============================================================
+        // FILTER BY TERM
+        // ============================================================
+
+        if (!string.IsNullOrWhiteSpace(request.Term))
+        {
+            query = query.Where(x =>
+                x.Term == request.Term);
+        }
+
+        // ============================================================
+        // RESULT
+        // ============================================================
+
+        var results = await query
+            .OrderBy(x => x.Student.User.FullName)
+            .ThenBy(x => x.Subject.Name)
+            .Select(x => new
+            {
+                resultId = x.Id,
+
+                // ====================================================
+                // STUDENT
+                // ====================================================
+
+                studentId = x.StudentId,
+
+                studentName = x.Student.User.FullName,
+
+                studentNumber = x.Student.StudentNumber,
+
+                // ====================================================
+                // SUBJECT
+                // ====================================================
+
+                subjectId = x.SubjectId,
+
+                subjectName = x.Subject.Name,
+
+                subjectCode = x.Subject.Code,
+
+                // ====================================================
+                // CLASS
+                // ====================================================
+
+                classId = x.ClassId,
+
+                className = x.Class.Name,
+
+                // ====================================================
+                // SCHOOL
+                // ====================================================
+
+                schoolId = x.SchoolId,
+
+                // ====================================================
+                // ACADEMIC
+                // ====================================================
+
+                session = x.Session,
+
+                term = x.Term,
+
+                // ====================================================
+                // SCORES
+                // ====================================================
+
+                score = x.Score,
+
+                examScore = x.ExamScore,
+
+                testScore = x.TestScore,
+
+                // ====================================================
+                // RESULT
+                // ====================================================
+
+                grade = x.Grade,
+
+                remark = x.Remark,
+
+                createdAt = x.CreatedAt
+            })
+            .ToListAsync();
+
+        return (
+            true,
+            results,
+            null
+        );
+    }
+
+    public async Task<(bool Success, object? Data, string? Error)>
+    UpdateAsync(
+        Guid schoolId,
+        Guid resultId,
+        UpdateResultRequest request)
+    {
+        var result = await _context.StudentResults
+            .Include(x => x.Student)
+                .ThenInclude(x => x.User)
+            .Include(x => x.Subject)
+            .Include(x => x.Class)
+            .FirstOrDefaultAsync(x =>
+                x.Id == resultId &&
+                x.SchoolId == schoolId);
+
+        if (result == null)
+        {
+            return (
+                false,
+                null,
+                "Result not found in this school."
+            );
+        }
+
+        result.Score = request.Score;
+        result.ExamScore = request.ExamScore;
+        result.TestScore = request.TestScore;
+        result.Remark = request.Remark;
+
+        result.Grade = CalculateGrade(request.Score);
+
+        await _context.SaveChangesAsync();
+
+        return (
+            true,
+            new
+            {
+                resultId = result.Id,
+
+                studentId = result.StudentId,
+                studentName = result.Student.User.FullName,
+
+                subjectId = result.SubjectId,
+                subjectName = result.Subject.Name,
+
+                classId = result.ClassId,
+                className = result.Class.Name,
+
+                schoolId = result.SchoolId,
+
+                result.Session,
+                result.Term,
+                result.Score,
+                result.ExamScore,
+                result.TestScore,
+                result.Grade,
+                result.Remark,
+                result.CreatedAt
+            },
+            null
+        );
+    }
+
+    public async Task<(bool Success, string? Error)>
+    DeleteAsync(
+        Guid schoolId,
+        Guid resultId)
+    {
+        var result = await _context.StudentResults
+            .FirstOrDefaultAsync(x =>
+                x.Id == resultId &&
+                x.SchoolId == schoolId);
+
+        if (result == null)
+        {
+            return (
+                false,
+                "Result not found in this school."
+            );
+        }
+
+        _context.StudentResults.Remove(result);
+
+        await _context.SaveChangesAsync();
+
+        return (true, null);
+    }
+
     public async Task<(
         bool Success,
         ResultImportPreviewResponse? Data,
@@ -436,7 +808,7 @@ public class ResultImportService(
                 ExamScore = row.ExamScore,
 
                 Score = total,
-                
+
                 Grade = grade.Grade,
 
                 Remark = row.Remark

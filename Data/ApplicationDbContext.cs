@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using UserManagementApi.Models;
+using UserManagementApi.Models.Assignments;
 using UserManagementApi.Models.AuthModels;
 using UserManagementApi.Models.Results;
 using UserManagementApi.Models.SchoolModels;
@@ -11,34 +12,69 @@ public class ApplicationDbContext(
     DbContextOptions<ApplicationDbContext> options)
     : IdentityDbContext<User>(options)
 {
+    // ================================================================
+    // AUTH
+    // ================================================================
+
     public DbSet<RefreshToken> RefreshTokens { get; set; }
 
+    // ================================================================
+    // SCHOOL
+    // ================================================================
+
     public DbSet<School> Schools { get; set; }
-
-    public DbSet<StudentProfile> StudentProfiles { get; set; } = null!;
-    public DbSet<StudentResult> StudentResults { get; set; } = null!;
-
-    public DbSet<Teacher> Teachers { get; set; }
-
-    public DbSet<Parent> Parents { get; set; }
 
     public DbSet<Class> Classes { get; set; }
 
     public DbSet<Subject> Subjects { get; set; }
 
+    // ================================================================
+    // STUDENTS
+    // ================================================================
+
+    public DbSet<StudentProfile> StudentProfiles { get; set; } = null!;
+
+    // ================================================================
+    // TEACHERS
+    // ================================================================
+
+    public DbSet<Teacher> Teachers { get; set; }
+
     public DbSet<TeacherClass> TeacherClasses { get; set; }
 
     public DbSet<TeacherSubject> TeacherSubjects { get; set; }
 
+    // ================================================================
+    // PARENTS
+    // ================================================================
+
+    public DbSet<Parent> Parents { get; set; }
+
     public DbSet<ParentStudent> ParentStudents { get; set; }
+
+    // ================================================================
+    // RESULTS
+    // ================================================================
+
+    public DbSet<StudentResult> StudentResults { get; set; } = null!;
+
+    // ================================================================
+    // ACADEMIC SESSIONS
+    // ================================================================
+
+    public DbSet<AcademicSession> AcademicSessions { get; set; } = null!;
+
+    public DbSet<Assignment> Assignments { get; set; } = null!;
+    public DbSet<AssignmentSubmission> AssignmentSubmissions { get; set; } = null!;
+    public DbSet<AttendanceRecord> AttendanceRecords { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
 
-        // -------------------------
+        // ============================================================
         // USER
-        // -------------------------
+        // ============================================================
 
         builder.Entity<User>()
             .HasIndex(u => u.NormalizedEmail)
@@ -51,9 +87,9 @@ public class ApplicationDbContext(
             .OnDelete(DeleteBehavior.Restrict);
 
 
-        // -------------------------
+        // ============================================================
         // STUDENT
-        // -------------------------
+        // ============================================================
 
         builder.Entity<StudentProfile>()
             .HasOne(s => s.User)
@@ -71,7 +107,7 @@ public class ApplicationDbContext(
             .HasOne(s => s.Class)
             .WithMany(c => c.Students)
             .HasForeignKey(s => s.ClassId)
-            .OnDelete(DeleteBehavior.SetNull);
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.Entity<StudentProfile>()
             .HasIndex(s => new
@@ -81,9 +117,10 @@ public class ApplicationDbContext(
             })
             .IsUnique();
 
-        // -------------------------
+
+        // ============================================================
         // STUDENT RESULTS
-        // -------------------------
+        // ============================================================
 
         builder.Entity<StudentResult>()
             .HasOne(x => x.Student)
@@ -109,7 +146,9 @@ public class ApplicationDbContext(
             .HasForeignKey(x => x.ClassId)
             .OnDelete(DeleteBehavior.Restrict);
 
-            builder.Entity<StudentResult>()
+        // Prevent duplicate result for:
+        // Student + Subject + Session + Term
+        builder.Entity<StudentResult>()
             .HasIndex(x => new
             {
                 x.StudentId,
@@ -119,9 +158,10 @@ public class ApplicationDbContext(
             })
             .IsUnique();
 
-        // -------------------------
+
+        // ============================================================
         // TEACHER
-        // -------------------------
+        // ============================================================
 
         builder.Entity<Teacher>()
             .HasOne(t => t.User)
@@ -144,9 +184,9 @@ public class ApplicationDbContext(
             .IsUnique();
 
 
-        // -------------------------
+        // ============================================================
         // PARENT
-        // -------------------------
+        // ============================================================
 
         builder.Entity<Parent>()
             .HasOne(p => p.User)
@@ -161,9 +201,9 @@ public class ApplicationDbContext(
             .OnDelete(DeleteBehavior.Restrict);
 
 
-        // -------------------------
+        // ============================================================
         // CLASS
-        // -------------------------
+        // ============================================================
 
         builder.Entity<Class>()
             .HasOne(c => c.School)
@@ -172,9 +212,9 @@ public class ApplicationDbContext(
             .OnDelete(DeleteBehavior.Cascade);
 
 
-        // -------------------------
+        // ============================================================
         // SUBJECT
-        // -------------------------
+        // ============================================================
 
         builder.Entity<Subject>()
             .HasOne(s => s.School)
@@ -183,9 +223,9 @@ public class ApplicationDbContext(
             .OnDelete(DeleteBehavior.Cascade);
 
 
-        // -------------------------
+        // ============================================================
         // TEACHER CLASS
-        // -------------------------
+        // ============================================================
 
         builder.Entity<TeacherClass>()
             .HasKey(tc => new
@@ -207,9 +247,9 @@ public class ApplicationDbContext(
             .OnDelete(DeleteBehavior.Cascade);
 
 
-        // -------------------------
+        // ============================================================
         // TEACHER SUBJECT
-        // -------------------------
+        // ============================================================
 
         builder.Entity<TeacherSubject>()
             .HasKey(ts => new
@@ -231,9 +271,9 @@ public class ApplicationDbContext(
             .OnDelete(DeleteBehavior.Cascade);
 
 
-        // -------------------------
+        // ============================================================
         // PARENT STUDENT
-        // -------------------------
+        // ============================================================
 
         builder.Entity<ParentStudent>()
             .HasKey(ps => new
@@ -253,5 +293,24 @@ public class ApplicationDbContext(
             .WithMany(s => s.Parents)
             .HasForeignKey(ps => ps.StudentId)
             .OnDelete(DeleteBehavior.Cascade);
+
+
+        // ============================================================
+        // ACADEMIC SESSION
+        // ============================================================
+
+        builder.Entity<AcademicSession>()
+            .HasOne(x => x.School)
+            .WithMany()
+            .HasForeignKey(x => x.SchoolId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Only one current academic period per school
+        builder.Entity<AcademicSession>()
+            .HasIndex(x => new
+            {
+                x.SchoolId,
+                x.IsCurrent
+            });
     }
 }

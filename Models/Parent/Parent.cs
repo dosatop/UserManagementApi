@@ -6,15 +6,25 @@ public class Parent
 {
     public Guid Id { get; set; }
 
-    // Login account
+    // ============================================================
+    // LOGIN ACCOUNT
+    // ============================================================
+
     public string UserId { get; set; } = string.Empty;
 
     public User User { get; set; } = null!;
 
-    // School
+    // ============================================================
+    // SCHOOL
+    // ============================================================
+
     public Guid SchoolId { get; set; }
 
     public School School { get; set; } = null!;
+
+    // ============================================================
+    // CHILDREN
+    // ============================================================
 
     public ICollection<ParentStudent> Children { get; set; } = [];
 }

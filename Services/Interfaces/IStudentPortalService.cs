@@ -15,4 +15,36 @@ public interface IStudentPortalService
             string userId,
             string session,
             string term);
+
+    // ============================================================
+    // ATTENDANCE
+    // ============================================================
+
+    Task<(bool Success, object? Data, string? Error)>
+        GetAttendanceAsync(
+            string userId,
+            string session,
+            string term);
+
+    // ============================================================
+    // ASSIGNMENTS
+    // ============================================================
+
+    Task<(bool Success, object? Data, string? Error)>
+        GetAssignmentsAsync(
+            string userId,
+            string session,
+            string term);
+
+    Task<(bool Success, object? Data, string? Error)>
+        GetAssignmentAsync(
+            string userId,
+            Guid assignmentId);
+
+    Task<(bool Success, object? Data, string? Error)>
+        SubmitAssignmentAsync(
+            string userId,
+            Guid assignmentId,
+            string? submissionText,
+            string? attachmentUrl);
 }

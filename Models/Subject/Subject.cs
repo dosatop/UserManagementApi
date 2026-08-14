@@ -1,3 +1,5 @@
+using UserManagementApi.Models.Assignments;
+using UserManagementApi.Models.Attendance;
 using UserManagementApi.Models.SchoolModels;
 
 namespace UserManagementApi.Models;
@@ -14,5 +16,21 @@ public class Subject
 
     public string? Code { get; set; }
 
+    // ============================================================
+    // TEACHERS
+    // ============================================================
+
     public ICollection<TeacherSubject> TeacherSubjects { get; set; } = [];
+
+    // ============================================================
+    // ASSIGNMENTS
+    // ============================================================
+
+    public ICollection<Assignment> Assignments { get; set; } = [];
+
+    // ============================================================
+    // ATTENDANCE
+    // ============================================================
+
+    public ICollection<AttendanceRecord> AttendanceRecords { get; set; } = [];
 }
