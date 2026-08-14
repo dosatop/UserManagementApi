@@ -18,7 +18,7 @@ public class CreateAssignmentRequest
 
     public string? AttachmentUrl { get; set; }
 
-    public DateTime? DueDate { get; set; }
+    public string? DueDate { get; set; }
 }
 
 public class UpdateAssignmentRequest

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using UserManagementApi.Data;
 using UserManagementApi.DTOs.Results;
@@ -1214,24 +1215,22 @@ public class TeacherPortalService(
 
         DateTime? dueDateUtc = null;
 
-        if (request.DueDate.HasValue)
+        if (!string.IsNullOrWhiteSpace(request.DueDate))
         {
-            dueDateUtc = request.DueDate.Value.Kind switch
+            if (!DateTime.TryParse(
+                request.DueDate,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var parsedDate))
             {
-                DateTimeKind.Utc =>
-                    request.DueDate.Value,
+                return (
+                    false,
+                    null,
+                    "Invalid due date. Example: 20 August 2026 8:00 AM"
+                );
+            }
 
-                DateTimeKind.Local =>
-                    request.DueDate.Value.ToUniversalTime(),
-
-                DateTimeKind.Unspecified =>
-                    DateTime.SpecifyKind(
-                        request.DueDate.Value,
-                        DateTimeKind.Utc
-                    ),
-
-                _ => request.DueDate.Value
-            };
+            dueDateUtc = parsedDate;
         }
 
         // ============================================================
