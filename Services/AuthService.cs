@@ -51,6 +51,7 @@ public class AuthService(
 
         Guid? schoolId = null;
         string? schoolName = null;
+        Guid? parentId = null;
 
         if (role == Roles.Admin)
         {
@@ -78,11 +79,36 @@ public class AuthService(
         }
         else if (role == Roles.Parent)
         {
-            schoolId = await _context.Parents
-                .AsNoTracking()
-                .Where(x => x.UserId == user.Id)
-                .Select(x => (Guid?)x.SchoolId)
-                .FirstOrDefaultAsync();
+            var parent = await _context.Parents
+        .AsNoTracking()
+        .FirstOrDefaultAsync(x => x.UserId == user.Id);
+
+            if (parent == null)
+            {
+                _logger.LogError(
+                    "PARENT PROFILE NOT FOUND. UserId: {UserId}",
+                    user.Id
+                );
+
+                return ServiceResult<LoginResponse>.Failure([
+                    new ServiceError
+            {
+                Code = "PARENT_PROFILE_NOT_FOUND",
+                Message = "Parent profile not found."
+            }
+                ]);
+            }
+
+            parentId = parent.Id;
+            schoolId = parent.SchoolId;
+
+            _logger.LogInformation(
+                "PARENT FOUND. ParentId: {ParentId}, UserId: {UserId}, SchoolId: {SchoolId}",
+                parent.Id,
+                parent.UserId,
+                parent.SchoolId
+            );
+
         }
         // Get school name separately
         if (schoolId.HasValue)
@@ -121,6 +147,7 @@ public class AuthService(
                 Role = role!,
                 SchoolId = schoolId,
                 SchoolName = schoolName,
+                ParentId = parentId,
 
                 TokenResponse = new TokenResponse
                 {

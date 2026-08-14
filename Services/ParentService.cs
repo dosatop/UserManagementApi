@@ -103,13 +103,15 @@ public class ParentService : IParentService
             .ToListAsync();
     }
 
+
     public async Task<(bool Success, object? Data, string? Error)>
-        AssignStudentAsync(
-            Guid schoolId,
-            Guid parentId,
-            Guid studentId)
+   AssignStudentAsync(
+       Guid schoolId,
+       Guid parentId,
+       Guid studentId)
     {
         var parent = await _context.Parents
+            .Include(x => x.User)
             .FirstOrDefaultAsync(x =>
                 x.Id == parentId &&
                 x.SchoolId == schoolId);
