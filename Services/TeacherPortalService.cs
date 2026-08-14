@@ -1209,6 +1209,32 @@ public class TeacherPortalService(
         }
 
         // ============================================================
+        // NORMALIZE DUE DATE
+        // ============================================================
+
+        DateTime? dueDateUtc = null;
+
+        if (request.DueDate.HasValue)
+        {
+            dueDateUtc = request.DueDate.Value.Kind switch
+            {
+                DateTimeKind.Utc =>
+                    request.DueDate.Value,
+
+                DateTimeKind.Local =>
+                    request.DueDate.Value.ToUniversalTime(),
+
+                DateTimeKind.Unspecified =>
+                    DateTime.SpecifyKind(
+                        request.DueDate.Value,
+                        DateTimeKind.Utc
+                    ),
+
+                _ => request.DueDate.Value
+            };
+        }
+
+        // ============================================================
         // CREATE
         // ============================================================
 
@@ -1230,7 +1256,7 @@ public class TeacherPortalService(
             Term = period.Term,
 
             AssignedAt = DateTime.UtcNow,
-            DueDate = request.DueDate,
+            DueDate = dueDateUtc,
 
             IsPublished = true,
 
