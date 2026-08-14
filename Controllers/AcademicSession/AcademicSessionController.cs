@@ -9,7 +9,7 @@ namespace UserManagementApi.Controllers;
 
 [ApiController]
 [Route("api/academic-sessions")]
-[Authorize(Roles = $"{Roles.SuperAdmin},{Roles.Student}")]
+[Authorize(Roles = $"{Roles.SuperAdmin},{Roles.Admin}")]
 public class AcademicSessionController(
     IAcademicSessionService academicSessionService) : ControllerBase
 {
