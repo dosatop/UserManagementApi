@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using UserManagementApi.Data;
 using UserManagementApi.DTOs.Auth.Roles;
 using UserManagementApi.Models;
@@ -17,38 +18,74 @@ public class AuthService(
     private readonly RolesService _roleService = roleService;
 
     public async Task<ServiceResult<LoginResponse>> LoginAsync(
-        string email,
-        string password)
+      string email,
+      string password)
     {
-        _logger.LogInformation(
-         "Login attempt");
+        _logger.LogInformation("Login attempt");
 
-        var user = await _userManager
-            .FindByEmailAsync(email);
+        var user = await _userManager.FindByEmailAsync(email);
 
         if (user is null)
             return ServiceResult<LoginResponse>.Failure([
-                new ServiceError {
-                    Code = AuthErrorCodes.InvalidCredentials,
-                    Message = "Invalid email or password"
-                }
+                new ServiceError
+            {
+                Code = AuthErrorCodes.InvalidCredentials,
+                Message = "Invalid email or password"
+            }
             ]);
 
-
         var isPasswordValid =
-            await _userManager
-                .CheckPasswordAsync(user, password);
+            await _userManager.CheckPasswordAsync(user, password);
 
         if (!isPasswordValid)
             return ServiceResult<LoginResponse>.Failure([
                 new ServiceError
-                {
-                    Code = AuthErrorCodes.InvalidCredentials,
-                    Message = "Invalid email or password"
-                }
+            {
+                Code = AuthErrorCodes.InvalidCredentials,
+                Message = "Invalid email or password"
+            }
             ]);
 
-        var accessToken = await _tokenService.CreateAccessToken(user);
+        var roles = await _userManager.GetRolesAsync(user);
+        var role = roles.FirstOrDefault();
+
+        Guid? schoolId = null;
+
+        if (role == Roles.Admin)
+        {
+            schoolId = await _context.Users
+                .AsNoTracking()
+                .Where(x => x.Id == user.Id)
+                .Select(x => (Guid?)x.SchoolId)
+                .FirstOrDefaultAsync();
+        }
+        else if (role == Roles.Student)
+        {
+            schoolId = await _context.StudentProfiles
+                .AsNoTracking()
+                .Where(x => x.UserId == user.Id)
+                .Select(x => (Guid?)x.SchoolId)
+                .FirstOrDefaultAsync();
+        }
+        else if (role == Roles.Teacher)
+        {
+            schoolId = await _context.Teachers
+                .AsNoTracking()
+                .Where(x => x.UserId == user.Id)
+                .Select(x => (Guid?)x.SchoolId)
+                .FirstOrDefaultAsync();
+        }
+        else if (role == Roles.Parent)
+        {
+            schoolId = await _context.Parents
+                .AsNoTracking()
+                .Where(x => x.UserId == user.Id)
+                .Select(x => (Guid?)x.SchoolId)
+                .FirstOrDefaultAsync();
+        }
+
+        var accessToken =
+            await _tokenService.CreateAccessToken(user);
 
         var refreshToken = new RefreshToken
         {
@@ -62,10 +99,9 @@ public class AuthService(
         await _context.SaveChangesAsync();
 
         _logger.LogInformation(
-    "User {UserId} logged in successfully",
-    user.Id);
-        var roles = await _userManager.GetRolesAsync(user);
-        var role = roles.FirstOrDefault();
+            "User {UserId} logged in successfully",
+            user.Id);
+
         return ServiceResult<LoginResponse>.Success(
             new LoginResponse
             {
@@ -74,7 +110,8 @@ public class AuthService(
                 Email = user.Email!,
                 PhoneNumber = user.PhoneNumber!,
                 Role = role!,
-                SchoolId = user.SchoolId,
+                SchoolId = schoolId,
+
                 TokenResponse = new TokenResponse
                 {
                     AccessToken = accessToken.AccessToken,
