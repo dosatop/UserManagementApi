@@ -50,6 +50,7 @@ public class AuthService(
         var role = roles.FirstOrDefault();
 
         Guid? schoolId = null;
+        string? schoolName = null;
 
         if (role == Roles.Admin)
         {
@@ -83,7 +84,15 @@ public class AuthService(
                 .Select(x => (Guid?)x.SchoolId)
                 .FirstOrDefaultAsync();
         }
-
+        // Get school name separately
+        if (schoolId.HasValue)
+        {
+            schoolName = await _context.Schools
+                .AsNoTracking()
+                .Where(x => x.Id == schoolId.Value)
+                .Select(x => x.Name)
+                .FirstOrDefaultAsync();
+        }
         var accessToken =
             await _tokenService.CreateAccessToken(user);
 
@@ -111,6 +120,7 @@ public class AuthService(
                 PhoneNumber = user.PhoneNumber!,
                 Role = role!,
                 SchoolId = schoolId,
+                SchoolName = schoolName,
 
                 TokenResponse = new TokenResponse
                 {
