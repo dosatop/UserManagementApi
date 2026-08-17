@@ -134,15 +134,7 @@ public async Task<(bool Success, object? Data, string? Error)>
         Guid? classId,
         Guid? subjectId)
 {
-    if (!classId.HasValue && !subjectId.HasValue)
-    {
-        return (
-            false,
-            null,
-            "Provide a classId, subjectId, or both."
-        );
-    }
-
+    
     // Validate class if supplied
     if (classId.HasValue)
     {
