@@ -68,8 +68,7 @@ public class AdminService(ApplicationDbContext context) : IAdminService
     // ================================================================
     // TEACHERS
     // ================================================================
-
- public async Task<List<AdminTeacherDto>> GetTeachersAsync(Guid schoolId)
+public async Task<List<AdminTeacherDto>> GetTeachersAsync(Guid schoolId)
 {
     return await _context.Teachers
         .AsNoTracking()
@@ -83,6 +82,17 @@ public class AdminService(ApplicationDbContext context) : IAdminService
             TeacherName = x.User.FullName,
             Email = x.User.Email,
             PhoneNumber = x.User.PhoneNumber,
+
+            // Class teacher information
+            IsClassTeacher = x.TeacherClasses.Any(),
+
+            ClassTeacher = x.TeacherClasses
+                .Select(tc => new AdminClassTeacherDto
+                {
+                    ClassId = tc.ClassId,
+                    ClassName = tc.Class.Name
+                })
+                .FirstOrDefault(),
 
             Subjects = x.TeacherSubjects
                 .Select(ts => new AdminTeacherSubjectDto

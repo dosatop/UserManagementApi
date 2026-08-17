@@ -15,18 +15,19 @@ public class AdminDashboardDto
 public class AdminTeacherDto
 {
     public Guid TeacherId { get; set; }
-
-    public string UserId { get; set; } = string.Empty;
-
+    public string UserId { get; set; }
     public Guid SchoolId { get; set; }
 
-    public string? TeacherName { get; set; }
+    public string TeacherName { get; set; }
     public string? Email { get; set; }
     public string? PhoneNumber { get; set; }
 
+    public bool IsClassTeacher { get; set; }
+
+    public AdminClassTeacherDto? ClassTeacher { get; set; }
+
     public List<AdminTeacherSubjectDto> Subjects { get; set; } = [];
 }
-
 
 public class AdminTeacherSubjectDto
 {
@@ -37,7 +38,7 @@ public class AdminTeacherSubjectDto
     public string? Code { get; set; }
 
     // Class this teacher teaches the subject to
-    public Guid ClassId { get; set; }
+    public Guid? ClassId { get; set; }
 
     public string? ClassName { get; set; }
 }
@@ -97,6 +98,8 @@ public class AdminClassTeacherDto
     public string? PhoneNumber { get; set; }
 
     public Guid SubjectId { get; set; }
+    public Guid ClassId { get; set; }
+    public string ClassName { get; set; }
 
     public string? SubjectName { get; set; }
     public string? SubjectCode { get; set; }

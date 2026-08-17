@@ -46,6 +46,7 @@ public class ApplicationDbContext(
     public DbSet<TeacherClass> TeacherClasses { get; set; }
 
     public DbSet<TeacherSubject> TeacherSubjects { get; set; }
+    public DbSet<ClassTeacher> ClassTeachers { get; set; }
 
 
     // ================================================================
@@ -182,11 +183,7 @@ public class ApplicationDbContext(
         // ============================================================
 
         builder.Entity<TeacherClass>()
-            .HasKey(tc => new
-            {
-                tc.TeacherId,
-                tc.ClassId
-            });
+            .HasKey(tc => tc.Id);
 
 
         // Teacher → TeacherClasses
@@ -204,17 +201,18 @@ public class ApplicationDbContext(
             .HasForeignKey(tc => tc.ClassId)
             .OnDelete(DeleteBehavior.Cascade);
 
+
+        // One class can have only ONE class teacher
+        builder.Entity<TeacherClass>()
+            .HasIndex(tc => tc.ClassId)
+            .IsUnique();
+
         // ============================================================
-        // TEACHER SUBJECT CLASS
+        // TEACHER SUBJECT
         // ============================================================
 
         builder.Entity<TeacherSubject>()
-            .HasKey(ts => new
-            {
-                ts.TeacherId,
-                ts.SubjectId,
-                ts.ClassId
-            });
+            .HasKey(ts => ts.Id);
 
 
         // Teacher → TeacherSubjects
@@ -234,11 +232,24 @@ public class ApplicationDbContext(
 
 
         // Class → TeacherSubjects
+        // Class is OPTIONAL
         builder.Entity<TeacherSubject>()
             .HasOne(ts => ts.Class)
             .WithMany(c => c.TeacherSubjects)
             .HasForeignKey(ts => ts.ClassId)
             .OnDelete(DeleteBehavior.Restrict);
+
+
+        // Prevent duplicate assignments
+        builder.Entity<TeacherSubject>()
+            .HasIndex(ts => new
+            {
+                ts.TeacherId,
+                ts.SubjectId,
+                ts.ClassId
+            })
+            .IsUnique();
+
         // ============================================================
         // PARENT
         // ============================================================
@@ -466,7 +477,7 @@ public class ApplicationDbContext(
      .WithMany(s => s.AttendanceRecords)
      .HasForeignKey(x => x.SubjectId)
      .OnDelete(DeleteBehavior.Restrict);
-     
+
         builder.Entity<AttendanceRecord>()
             .HasIndex(x => new
             {

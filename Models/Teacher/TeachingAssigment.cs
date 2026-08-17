@@ -1,9 +1,13 @@
 using UserManagementApi.Models;
+using UserManagementApi.Models.SchoolModels;
 
-public class TeacherSubject
+public class TeachingAssignment
 {
     public Guid Id { get; set; }
+
     public Guid SchoolId { get; set; }
+    public School School { get; set; } = null!;
+
     public Guid TeacherId { get; set; }
     public Teacher Teacher { get; set; } = null!;
 

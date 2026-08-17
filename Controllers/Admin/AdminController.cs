@@ -1032,4 +1032,146 @@ public class AdminController(IAdminService adminService, ITeacherService teacher
         return Ok(result.Data);
     }
 
+    [HttpPost("teachers/{teacherId:guid}/teaching-assignments")]
+    public async Task<IActionResult> AssignTeachingSubject(
+     Guid teacherId,
+     [FromBody] AssignTeachingSubjectRequest request)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result =
+            await _teacherService.AssignTeachingSubjectAsync(
+                schoolId.Value,
+                teacherId,
+                request);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
+
+    [HttpPost("classes/{classId:guid}/class-teacher/{teacherId:guid}")]
+    public async Task<IActionResult> AssignClassTeacher(
+        Guid classId,
+        Guid teacherId)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result =
+            await _teacherService.AssignClassTeacherAsync(
+                schoolId.Value,
+                teacherId,
+                classId);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
+
+    [HttpDelete("teaching-subjects/{assignmentId:guid}")]
+    public async Task<IActionResult> RemoveTeachingSubject(
+        Guid assignmentId)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result =
+            await _teacherService.RemoveTeachingSubjectAsync(
+                schoolId.Value,
+                assignmentId);
+
+        if (!result.Success)
+        {
+            if (result.Error == "Teaching subject assignment not found.")
+            {
+                return NotFound(new
+                {
+                    message = result.Error
+                });
+            }
+
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
+
+    [HttpDelete("class-teachers/{assignmentId:guid}")]
+    public async Task<IActionResult> RemoveClassTeacher(
+        Guid assignmentId)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result =
+            await _teacherService.RemoveClassTeacherAsync(
+                schoolId.Value,
+                assignmentId);
+
+        if (!result.Success)
+        {
+            if (result.Error == "Class teacher assignment not found.")
+            {
+                return NotFound(new
+                {
+                    message = result.Error
+                });
+            }
+
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
 }

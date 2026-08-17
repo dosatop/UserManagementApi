@@ -14,8 +14,10 @@ public class TeacherService(
     UserManager<User> userManager) : ITeacherService
 {
     private readonly ApplicationDbContext _context = context;
-    private readonly IUserManagementService _userManagementService = userManagementService;
+    private readonly IUserManagementService _userManagementService =
+        userManagementService;
     private readonly UserManager<User> _userManager = userManager;
+
 
     // ================================================================
     // CREATE TEACHER
@@ -77,7 +79,7 @@ public class TeacherService(
             Id = Guid.NewGuid(),
             UserId = user.Id,
             SchoolId = schoolId,
-            PhoneNumber = user.PhoneNumber,
+            PhoneNumber = request.PhoneNumber,
             EmployeeNumber = request.EmployeeNumber
         };
 
@@ -102,6 +104,7 @@ public class TeacherService(
         );
     }
 
+
     // ================================================================
     // GET ALL TEACHERS
     // ================================================================
@@ -117,13 +120,17 @@ public class TeacherService(
                 teacherId = x.Id,
                 userId = x.UserId,
                 employeeNumber = x.EmployeeNumber,
+
                 fullName = x.User.FullName,
                 email = x.User.Email,
                 phoneNumber = x.User.PhoneNumber,
-                schoolId = x.SchoolId
+
+                schoolId = x.SchoolId,
+                schoolName = x.School.Name
             })
             .ToListAsync();
     }
+
 
     // ================================================================
     // GET TEACHER BY ID
@@ -171,6 +178,7 @@ public class TeacherService(
         );
     }
 
+
     // ================================================================
     // UPDATE TEACHER
     // ================================================================
@@ -197,7 +205,7 @@ public class TeacherService(
         }
 
         // ------------------------------------------------------------
-        // Check employee number
+        // CHECK EMPLOYEE NUMBER
         // ------------------------------------------------------------
 
         var employeeExists = await _context.Teachers
@@ -216,7 +224,7 @@ public class TeacherService(
         }
 
         // ------------------------------------------------------------
-        // Check email
+        // CHECK EMAIL
         // ------------------------------------------------------------
 
         var existingUser = await _userManager
@@ -233,17 +241,20 @@ public class TeacherService(
         }
 
         // ------------------------------------------------------------
-        // Update User
+        // UPDATE USER DETAILS
         // ------------------------------------------------------------
 
         teacher.User.FullName = request.FullName;
         teacher.User.PhoneNumber = request.PhoneNumber;
 
         // ------------------------------------------------------------
-        // Update Email
+        // UPDATE EMAIL
         // ------------------------------------------------------------
 
-        if (teacher.User.Email != request.Email)
+        if (!string.Equals(
+                teacher.User.Email,
+                request.Email,
+                StringComparison.OrdinalIgnoreCase))
         {
             var emailResult = await _userManager
                 .SetEmailAsync(
@@ -283,14 +294,11 @@ public class TeacherService(
         }
 
         // ------------------------------------------------------------
-        // Update Teacher profile
+        // UPDATE TEACHER PROFILE
         // ------------------------------------------------------------
 
-        teacher.EmployeeNumber =
-            request.EmployeeNumber;
-
-        teacher.PhoneNumber =
-            request.PhoneNumber;
+        teacher.EmployeeNumber = request.EmployeeNumber;
+        teacher.PhoneNumber = request.PhoneNumber;
 
         await _context.SaveChangesAsync();
 
@@ -309,6 +317,7 @@ public class TeacherService(
             null
         );
     }
+
 
     // ================================================================
     // DELETE TEACHER
@@ -345,20 +354,18 @@ public class TeacherService(
             );
         }
 
-        // Delete Teacher profile first
-        _context.Teachers.Remove(teacher);
+        // ------------------------------------------------------------
+        // DELETE IDENTITY USER FIRST
+        // ------------------------------------------------------------
 
-        await _context.SaveChangesAsync();
-
-        // Delete Identity user
-        var result = await _userManager
+        var userResult = await _userManager
             .DeleteAsync(user);
 
-        if (!result.Succeeded)
+        if (!userResult.Succeeded)
         {
             var errors = string.Join(
                 ", ",
-                result.Errors.Select(x => x.Description));
+                userResult.Errors.Select(x => x.Description));
 
             return (
                 false,
@@ -367,12 +374,423 @@ public class TeacherService(
             );
         }
 
+        // ------------------------------------------------------------
+        // DELETE TEACHER PROFILE
+        // ------------------------------------------------------------
+
+        _context.Teachers.Remove(teacher);
+
+        await _context.SaveChangesAsync();
+
         return (
             true,
             new
             {
                 teacherId,
                 message = "Teacher deleted successfully."
+            },
+            null
+        );
+    }
+
+
+    // ================================================================
+    // ASSIGN TEACHING SUBJECT
+    // ================================================================
+    //
+    // A teaching subject assignment is:
+    //
+    // Teacher + Subject + Class
+    //
+    // ClassId is compulsory.
+    //
+    // ================================================================
+
+    public async Task<(bool Success, object? Data, string? Error)>
+     AssignTeachingSubjectAsync(
+         Guid schoolId,
+         Guid teacherId,
+         AssignTeachingSubjectRequest request)
+    {
+        // ------------------------------------------------------------
+        // CLASS VALIDATION
+        // ------------------------------------------------------------
+
+        if (request.ClassId == null || request.ClassId == Guid.Empty)
+        {
+            return (
+                false,
+                null,
+                "Class is required when assigning a teaching subject."
+            );
+        }
+
+        // ------------------------------------------------------------
+        // TEACHER
+        // ------------------------------------------------------------
+
+        var teacher = await _context.Teachers
+            .Include(x => x.User)
+            .FirstOrDefaultAsync(x =>
+                x.Id == teacherId &&
+                x.SchoolId == schoolId);
+
+        if (teacher == null)
+        {
+            return (
+                false,
+                null,
+                "Teacher not found in this school."
+            );
+        }
+
+        // ------------------------------------------------------------
+        // SUBJECT
+        // ------------------------------------------------------------
+
+        var subject = await _context.Subjects
+            .FirstOrDefaultAsync(x =>
+                x.Id == request.SubjectId &&
+                x.SchoolId == schoolId);
+
+        if (subject == null)
+        {
+            return (
+                false,
+                null,
+                "Subject not found in this school."
+            );
+        }
+
+        // ------------------------------------------------------------
+        // CLASS
+        // ------------------------------------------------------------
+
+        if (!request.ClassId.HasValue)
+        {
+            return (
+                false,
+                null,
+                "Class is required when assigning a teaching subject."
+            );
+        }
+
+        var classroom = await _context.Classes
+            .FirstOrDefaultAsync(x =>
+                x.Id == request.ClassId.Value &&
+                x.SchoolId == schoolId);
+
+        if (classroom == null)
+        {
+            return (
+                false,
+                null,
+                "Class not found in this school."
+            );
+        }
+
+        // ------------------------------------------------------------
+        // CHECK DUPLICATE ASSIGNMENT
+        // ------------------------------------------------------------
+
+        var alreadyAssigned = await _context.TeacherSubjects
+            .AnyAsync(x =>
+                x.TeacherId == teacherId &&
+                x.SubjectId == request.SubjectId &&
+                x.ClassId == request.ClassId.Value);
+
+        if (alreadyAssigned)
+        {
+            return (
+                false,
+                null,
+                "Teacher is already assigned to this subject for this class."
+            );
+        }
+
+        // ------------------------------------------------------------
+        // CREATE ASSIGNMENT
+        // ------------------------------------------------------------
+
+        var assignment = new TeacherSubject
+        {
+            Id = Guid.NewGuid(),
+            TeacherId = teacherId,
+            SubjectId = request.SubjectId,
+            ClassId = request.ClassId.Value
+        };
+
+        _context.TeacherSubjects.Add(assignment);
+
+        await _context.SaveChangesAsync();
+
+        // ------------------------------------------------------------
+        // RESPONSE
+        // ------------------------------------------------------------
+
+        return (
+            true,
+            new
+            {
+                assignmentId = assignment.Id,
+
+                teacherId = teacher.Id,
+                teacherName = teacher.User.FullName,
+
+                subjectId = subject.Id,
+                subjectName = subject.Name,
+
+                classId = classroom.Id,
+                className = classroom.Name,
+
+                message =
+                    "Teacher assigned to subject and class successfully."
+            },
+            null
+        );
+    }
+
+
+    // ================================================================
+    // REMOVE TEACHING SUBJECT
+    // ================================================================
+
+    public async Task<(bool Success, object? Data, string? Error)>
+        RemoveTeachingSubjectAsync(
+            Guid schoolId,
+            Guid assignmentId)
+    {
+        var assignment = await _context.TeacherSubjects
+            .Include(x => x.Teacher)
+                .ThenInclude(x => x.User)
+            .Include(x => x.Subject)
+            .Include(x => x.Class)
+            .FirstOrDefaultAsync(x =>
+                x.Id == assignmentId &&
+                x.Teacher.SchoolId == schoolId);
+
+        if (assignment == null)
+        {
+            return (
+                false,
+                null,
+                "Teaching subject assignment not found."
+            );
+        }
+
+        // ------------------------------------------------------------
+        // SAVE RESPONSE DETAILS
+        // ------------------------------------------------------------
+
+        var teacherId = assignment.TeacherId;
+        var teacherName = assignment.Teacher.User.FullName;
+
+        var subjectId = assignment.SubjectId;
+        var subjectName = assignment.Subject.Name;
+
+        var classId = assignment.ClassId;
+        var className = assignment.Class.Name;
+
+        // ------------------------------------------------------------
+        // REMOVE ASSIGNMENT
+        // ------------------------------------------------------------
+
+        _context.TeacherSubjects.Remove(assignment);
+
+        await _context.SaveChangesAsync();
+
+        return (
+            true,
+            new
+            {
+                assignmentId,
+
+                teacherId,
+                teacherName,
+
+                subjectId,
+                subjectName,
+
+                classId,
+                className,
+
+                message =
+                    "Teacher subject assignment removed successfully."
+            },
+            null
+        );
+    }
+
+
+    // ================================================================
+    // ASSIGN CLASS TEACHER
+    // ================================================================
+    //
+    // A class teacher assignment is:
+    //
+    // Teacher + Class
+    //
+    // One class can have only one class teacher.
+    //
+    // ================================================================
+
+    public async Task<(bool Success, object? Data, string? Error)>
+        AssignClassTeacherAsync(
+            Guid schoolId,
+            Guid teacherId,
+            Guid classId)
+    {
+        // ------------------------------------------------------------
+        // TEACHER
+        // ------------------------------------------------------------
+
+        var teacher = await _context.Teachers
+            .Include(x => x.User)
+            .FirstOrDefaultAsync(x =>
+                x.Id == teacherId &&
+                x.SchoolId == schoolId);
+
+        if (teacher == null)
+        {
+            return (
+                false,
+                null,
+                "Teacher not found in this school."
+            );
+        }
+
+        // ------------------------------------------------------------
+        // CLASS
+        // ------------------------------------------------------------
+
+        var classroom = await _context.Classes
+            .FirstOrDefaultAsync(x =>
+                x.Id == classId &&
+                x.SchoolId == schoolId);
+
+        if (classroom == null)
+        {
+            return (
+                false,
+                null,
+                "Class not found in this school."
+            );
+        }
+
+        // ------------------------------------------------------------
+        // CHECK IF CLASS ALREADY HAS A CLASS TEACHER
+        // ------------------------------------------------------------
+
+        var existingClassTeacher = await _context.TeacherClasses
+            .FirstOrDefaultAsync(x =>
+                x.ClassId == classId);
+
+        if (existingClassTeacher != null)
+        {
+            return (
+                false,
+                null,
+                "This class already has a class teacher."
+            );
+        }
+
+        // ------------------------------------------------------------
+        // CREATE ASSIGNMENT
+        // ------------------------------------------------------------
+
+        var assignment = new TeacherClass
+        {
+            Id = Guid.NewGuid(),
+            TeacherId = teacherId,
+            ClassId = classId
+        };
+
+        _context.TeacherClasses.Add(assignment);
+
+        await _context.SaveChangesAsync();
+
+        // ------------------------------------------------------------
+        // RESPONSE
+        // ------------------------------------------------------------
+
+        return (
+            true,
+            new
+            {
+                assignmentId = assignment.Id,
+
+                teacherId = teacher.Id,
+                teacherName = teacher.User.FullName,
+
+                classId = classroom.Id,
+                className = classroom.Name,
+
+                message =
+                    "Class teacher assigned successfully."
+            },
+            null
+        );
+    }
+
+
+    // ================================================================
+    // REMOVE CLASS TEACHER
+    // ================================================================
+
+    public async Task<(bool Success, object? Data, string? Error)>
+        RemoveClassTeacherAsync(
+            Guid schoolId,
+            Guid assignmentId)
+    {
+        var assignment = await _context.TeacherClasses
+            .Include(x => x.Teacher)
+                .ThenInclude(x => x.User)
+            .Include(x => x.Class)
+            .FirstOrDefaultAsync(x =>
+                x.Id == assignmentId &&
+                x.Teacher.SchoolId == schoolId);
+
+        if (assignment == null)
+        {
+            return (
+                false,
+                null,
+                "Class teacher assignment not found."
+            );
+        }
+
+        // ------------------------------------------------------------
+        // SAVE RESPONSE DETAILS
+        // ------------------------------------------------------------
+
+        var teacherId = assignment.TeacherId;
+        var teacherName = assignment.Teacher.User.FullName;
+
+        var classId = assignment.ClassId;
+        var className = assignment.Class.Name;
+
+        // ------------------------------------------------------------
+        // REMOVE ASSIGNMENT
+        // ------------------------------------------------------------
+
+        _context.TeacherClasses.Remove(assignment);
+
+        await _context.SaveChangesAsync();
+
+        return (
+            true,
+            new
+            {
+                assignmentId,
+
+                teacherId,
+                teacherName,
+
+                classId,
+                className,
+
+                message =
+                    "Class teacher assignment removed successfully."
             },
             null
         );
