@@ -10,6 +10,7 @@ using System.Text;
 using Resend;
 using UserManagementApi.Services.Interfaces;
 using UserManagementApi.Configuration;
+using Quartz;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -119,10 +120,29 @@ ResultGradingService>();
 builder.Services.AddScoped<
     ITeacherPortalService,
     TeacherPortalService>();
-    builder.Services.AddScoped<
-    IAcademicSessionService,
-    AcademicSessionService>();
+builder.Services.AddScoped<
+IAcademicSessionService,
+AcademicSessionService>();
+builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<ITeacherPortalService, TeacherPortalService>();
+builder.Services.AddQuartz(q =>
+{
+    var jobKey = new JobKey("my-job");
+
+    q.AddJob<MyJob>(options =>
+        options.WithIdentity(jobKey));
+
+    q.AddTrigger(options => options
+        .ForJob(jobKey)
+        .WithIdentity("keep-alive-trigger")
+        .WithSimpleSchedule(x => x.WithIntervalInMinutes(5).RepeatForever()));
+});
+
+builder.Services.AddQuartzHostedService(options =>
+{
+    options.WaitForJobsToComplete = true;
+});
+
 builder.Services.Configure<SeedAdminSettings>(
     builder.Configuration.GetSection("SeedAdmin"));
 

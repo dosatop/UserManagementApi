@@ -23,6 +23,7 @@ public class Teacher
     public Guid SchoolId { get; set; }
 
     public School School { get; set; } = null!;
+    public string PhoneNumber { get; set; } = null!;
 
     public string EmployeeNumber { get; set; } = string.Empty;
 

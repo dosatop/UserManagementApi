@@ -67,7 +67,8 @@ public class TeacherSubjectService : ITeacherSubjectService
         var teacherSubject = new TeacherSubject
         {
             TeacherId = teacherId,
-            SubjectId = request.SubjectId
+            SubjectId = request.SubjectId,
+            ClassId = request.ClassId
         };
 
         _context.TeacherSubjects.Add(teacherSubject);

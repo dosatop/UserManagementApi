@@ -21,6 +21,8 @@ public class UserManagementService(
         string fullName,
         string email,
         string password,
+        string phoneNumber,
+        string? employeeNumber,
         string role)
     {
         // Check if email already exists
@@ -41,6 +43,8 @@ public class UserManagementService(
             UserName = email,
             Email = email,
             FullName = fullName,
+            PhoneNumber = phoneNumber,
+            EmployeeNumber = employeeNumber,
             EmailConfirmed = false
         };
 
@@ -91,16 +95,16 @@ public class UserManagementService(
         );
     }
 
-     public async Task<(
-        bool Success,
-        User? User,
-        string? Error
-    )> CreateSchoolAdminAsync(
-        Guid schoolId,
-        string fullName,
-        string email,
-        string phoneNumber,
-        string password)
+    public async Task<(
+       bool Success,
+       User? User,
+       string? Error
+   )> CreateSchoolAdminAsync(
+       Guid schoolId,
+       string fullName,
+       string email,
+       string phoneNumber,
+       string password)
     {
         // 1. Check school
         var school = await _context.Schools

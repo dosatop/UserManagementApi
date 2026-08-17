@@ -21,5 +21,8 @@ namespace UserManagementApi.Models
 
         // Teachers assigned to this class
         public ICollection<TeacherClass> TeacherClasses { get; set; } = [];
+
+         public ICollection<TeacherSubject> TeacherSubjects { get; set; }
+        = [];
     }
 }

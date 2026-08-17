@@ -12,6 +12,7 @@ public class User : IdentityUser
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public Guid? SchoolId { get; set; }
+    public string? EmployeeNumber { get; set; }
     
 
     public School? School { get; set; }

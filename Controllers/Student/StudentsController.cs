@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using UserManagementApi.DTOs.Auth.Roles;
+using UserManagementApi.Services.Interfaces;
 
 [ApiController]
 [Route("api/schools/{schoolId:guid}/students")]
@@ -39,10 +40,11 @@ public class StudentsController : ControllerBase
 
     [HttpGet]
     public async Task<IActionResult> GetStudents(
-        Guid schoolId)
+        Guid schoolId, Guid? classId, Guid? subjectId)
     {
         return Ok(
-            await _studentService.GetStudentsAsync(
-                schoolId));
+            await _studentService.GetStudentsByClassOrSubjectAsync(
+
+                schoolId, classId, subjectId));
     }
 }

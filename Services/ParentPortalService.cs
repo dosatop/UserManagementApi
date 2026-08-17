@@ -58,7 +58,7 @@ public class ParentPortalService : IParentPortalService
             .Where(x => x.UserId == userId)
             .Select(x => new
             {
-                x.Id,
+                x.ParentId,
                 x.UserId,
 
                 FullName = x.User.FullName,
@@ -108,7 +108,7 @@ public class ParentPortalService : IParentPortalService
         var children = await _context.ParentStudents
             .AsNoTracking()
             .Where(x =>
-                x.ParentId == parent.Id)
+                x.ParentId == parent.ParentId)
             .Select(x => new
             {
                 StudentId = x.Student.Id,
@@ -160,7 +160,7 @@ public class ParentPortalService : IParentPortalService
         var child = await _context.ParentStudents
             .AsNoTracking()
             .Where(x =>
-                x.ParentId == parent.Id &&
+                x.ParentId == parent.ParentId &&
                 x.StudentId == studentId)
             .Select(x => new
             {
@@ -216,7 +216,7 @@ public class ParentPortalService : IParentPortalService
         }
 
         var linked = await IsChildOfParentAsync(
-            parent.Id,
+            parent.ParentId,
             studentId);
 
         if (!linked)
@@ -283,7 +283,7 @@ public class ParentPortalService : IParentPortalService
         }
 
         var linked = await IsChildOfParentAsync(
-            parent.Id,
+            parent.ParentId,
             studentId);
 
         if (!linked)
@@ -372,7 +372,7 @@ public class ParentPortalService : IParentPortalService
         // Verify that this child belongs to this parent.
 
         var linked = await IsChildOfParentAsync(
-            parent.Id,
+            parent.ParentId,
             studentId);
 
         if (!linked)
@@ -485,7 +485,7 @@ public class ParentPortalService : IParentPortalService
         }
 
         var linked = await IsChildOfParentAsync(
-            parent.Id,
+            parent.ParentId,
             studentId);
 
         if (!linked)
@@ -641,7 +641,7 @@ public class ParentPortalService : IParentPortalService
         }
 
         var linked = await IsChildOfParentAsync(
-            parent.Id,
+            parent.ParentId,
             studentId);
 
         if (!linked)
@@ -777,7 +777,7 @@ public class ParentPortalService : IParentPortalService
         }
 
         var linked = await IsChildOfParentAsync(
-            parent.Id,
+            parent.ParentId,
             studentId);
 
         if (!linked)

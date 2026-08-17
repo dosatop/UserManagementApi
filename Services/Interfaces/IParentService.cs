@@ -10,7 +10,24 @@ public interface IParentService
             CreateParentRequest request);
 
     Task<IEnumerable<object>>
-        GetParentsAsync(Guid schoolId);
+        GetParentsAsync(
+            Guid schoolId);
+
+    Task<(bool Success, object? Data, string? Error)>
+        GetParentAsync(
+            Guid schoolId,
+            Guid parentId);
+
+    Task<(bool Success, object? Data, string? Error)>
+        UpdateParentAsync(
+            Guid schoolId,
+            Guid parentId,
+            UpdateParentRequest request);
+
+    Task<(bool Success, string? Error)>
+        DeleteParentAsync(
+            Guid schoolId,
+            Guid parentId);
 
     Task<(bool Success, object? Data, string? Error)>
         AssignStudentAsync(

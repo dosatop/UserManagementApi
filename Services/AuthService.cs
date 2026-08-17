@@ -99,12 +99,12 @@ public class AuthService(
                 ]);
             }
 
-            parentId = parent.Id;
+            parentId = parent.ParentId;
             schoolId = parent.SchoolId;
 
             _logger.LogInformation(
                 "PARENT FOUND. ParentId: {ParentId}, UserId: {UserId}, SchoolId: {SchoolId}",
-                parent.Id,
+                parent.ParentId,
                 parent.UserId,
                 parent.SchoolId
             );

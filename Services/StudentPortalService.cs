@@ -5,14 +5,9 @@ using UserManagementApi.Services.Interfaces;
 
 namespace UserManagementApi.Services;
 
-public class StudentPortalService : IStudentPortalService
+public class StudentPortalService(ApplicationDbContext context) : IStudentPortalService
 {
-    private readonly ApplicationDbContext _context;
-
-    public StudentPortalService(ApplicationDbContext context)
-    {
-        _context = context;
-    }
+    private readonly ApplicationDbContext _context = context;
 
     // ============================================================
     // PROFILE

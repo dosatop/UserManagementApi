@@ -4,7 +4,7 @@ namespace UserManagementApi.Models;
 
 public class Parent
 {
-    public Guid Id { get; set; }
+    public Guid ParentId { get; set; }
 
     // ============================================================
     // LOGIN ACCOUNT

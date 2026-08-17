@@ -27,4 +27,29 @@ public interface IClassService
         DeleteClassAsync(
             Guid schoolId,
             Guid classId);
+
+            Task<(bool Success, object? Data, string? Error)>
+    GetClassAssignmentsAsync(
+        Guid schoolId,
+        Guid classId,
+        string session,
+        string term);
+
+        Task<(bool Success, object? Data, string? Error)>
+    GetAssignmentCountAsync(
+        Guid schoolId,
+        Guid classId,
+        string session,
+        string term);
+        
+        Task<(bool Success, object? Data, string? Error)>
+    GetSchoolAssignmentCountAsync(
+        Guid schoolId,
+        string session,
+        string term);
+        Task<(bool Success, object? Data, string? Error)>
+    GetClassStudentsAsync(
+        Guid schoolId,
+        Guid classId,
+        Guid? subjectId);
 }

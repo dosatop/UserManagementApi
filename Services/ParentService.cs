@@ -7,18 +7,12 @@ using UserManagementApi.Services.Interfaces;
 
 namespace UserManagementApi.Services;
 
-public class ParentService : IParentService
+public class ParentService(
+    ApplicationDbContext context,
+    IUserManagementService userManagementService) : IParentService
 {
-    private readonly ApplicationDbContext _context;
-    private readonly IUserManagementService _userManagementService;
-
-    public ParentService(
-        ApplicationDbContext context,
-        IUserManagementService userManagementService)
-    {
-        _context = context;
-        _userManagementService = userManagementService;
-    }
+    private readonly ApplicationDbContext _context = context;
+    private readonly IUserManagementService _userManagementService = userManagementService;
 
     public async Task<(bool Success, object? Data, string? Error)>
         CreateParentAsync(
@@ -42,6 +36,8 @@ public class ParentService : IParentService
                 request.FullName,
                 request.Email,
                 request.Password,
+                 request.PhoneNumber,
+                null,
                                 Roles.Parent);
 
         if (!userResult.Success)
@@ -59,7 +55,7 @@ public class ParentService : IParentService
 
         var parent = new Parent
         {
-            Id = Guid.NewGuid(),
+            ParentId = Guid.NewGuid(),
             UserId = user.Id,
             SchoolId = schoolId
         };
@@ -72,7 +68,7 @@ public class ParentService : IParentService
             true,
             new
             {
-                parent.Id,
+                parent.ParentId,
                 UserId = user.Id,
                 user.FullName,
                 user.Email,
@@ -92,7 +88,7 @@ public class ParentService : IParentService
             .Where(x => x.SchoolId == schoolId)
             .Select(x => new
             {
-                x.Id,
+                x.ParentId,
                 x.UserId,
                 FullName = x.User.FullName,
                 Email = x.User.Email,
@@ -105,6 +101,181 @@ public class ParentService : IParentService
 
 
     public async Task<(bool Success, object? Data, string? Error)>
+        GetParentAsync(
+            Guid schoolId,
+            Guid parentId)
+    {
+        var parent = await _context.Parents
+            .AsNoTracking()
+            .Where(x =>
+                x.ParentId == parentId &&
+                x.SchoolId == schoolId)
+            .Select(x => new
+            {
+                x.ParentId,
+                x.UserId,
+
+                FullName = x.User.FullName,
+                Email = x.User.Email,
+                PhoneNumber = x.User.PhoneNumber,
+
+                SchoolId = x.SchoolId,
+
+                Children = x.Children
+                    .Select(ps => new
+                    {
+                        StudentId = ps.Student.Id,
+                        StudentNumber = ps.Student.StudentNumber,
+                        StudentName = ps.Student.User.FullName,
+                        Email = ps.Student.User.Email,
+                        ClassId = ps.Student.ClassId,
+                        ClassName = ps.Student.Class.Name
+                    })
+                    .ToList()
+            })
+            .FirstOrDefaultAsync();
+
+        if (parent == null)
+        {
+            return (
+                false,
+                null,
+                "Parent not found."
+            );
+        }
+
+        return (
+            true,
+            parent,
+            null
+        );
+    }
+
+    public async Task<(bool Success, object? Data, string? Error)>
+        UpdateParentAsync(
+            Guid schoolId,
+            Guid parentId,
+            UpdateParentRequest request)
+    {
+        var parent = await _context.Parents
+            .Include(x => x.User)
+            .FirstOrDefaultAsync(x =>
+                x.ParentId == parentId &&
+                x.SchoolId == schoolId);
+
+        if (parent == null)
+        {
+            return (
+                false,
+                null,
+                "Parent not found."
+            );
+        }
+
+        var fullName = request.FullName?.Trim();
+        var email = request.Email?.Trim();
+        var phoneNumber = request.PhoneNumber?.Trim();
+
+        if (string.IsNullOrWhiteSpace(fullName))
+        {
+            return (
+                false,
+                null,
+                "Full name is required."
+            );
+        }
+
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return (
+                false,
+                null,
+                "Email is required."
+            );
+        }
+
+        // Check if another user already uses this email
+        var emailExists = await _context.Users
+            .AnyAsync(x =>
+                x.Id != parent.UserId &&
+                x.Email != null &&
+                x.Email.ToLower() == email.ToLower());
+
+        if (emailExists)
+        {
+            return (
+                false,
+                null,
+                "A user with this email already exists."
+            );
+        }
+
+        parent.User.FullName = fullName;
+        parent.User.Email = email;
+        parent.User.UserName = email;
+        parent.User.PhoneNumber = phoneNumber;
+
+        await _context.SaveChangesAsync();
+
+        return (
+            true,
+            new
+            {
+                parent.ParentId,
+                parent.UserId,
+                parent.User.FullName,
+                parent.User.Email,
+                parent.User.PhoneNumber,
+                parent.SchoolId
+            },
+            null
+        );
+    }
+
+    public async Task<(bool Success, string? Error)>
+        DeleteParentAsync(
+            Guid schoolId,
+            Guid parentId)
+    {
+        var parent = await _context.Parents
+            .Include(x => x.User)
+            .FirstOrDefaultAsync(x =>
+                x.ParentId == parentId &&
+                x.SchoolId == schoolId);
+
+        if (parent == null)
+        {
+            return (
+                false,
+                "Parent not found."
+            );
+        }
+
+        // Remove parent/student relationships
+        var assignments = await _context.ParentStudents
+            .Where(x => x.ParentId == parentId)
+            .ToListAsync();
+
+        if (assignments.Count > 0)
+        {
+            _context.ParentStudents.RemoveRange(assignments);
+        }
+
+        // Remove parent profile
+        _context.Parents.Remove(parent);
+
+        // Remove Identity user
+        if (parent.User != null)
+        {
+            _context.Users.Remove(parent.User);
+        }
+
+        await _context.SaveChangesAsync();
+
+        return (true, null);
+    }
+
+    public async Task<(bool Success, object? Data, string? Error)>
    AssignStudentAsync(
        Guid schoolId,
        Guid parentId,
@@ -113,7 +284,7 @@ public class ParentService : IParentService
         var parent = await _context.Parents
             .Include(x => x.User)
             .FirstOrDefaultAsync(x =>
-                x.Id == parentId &&
+                x.ParentId == parentId &&
                 x.SchoolId == schoolId);
 
         if (parent == null)
@@ -169,7 +340,7 @@ public class ParentService : IParentService
             true,
             new
             {
-                ParentId = parent.Id,
+                ParentId = parent.ParentId,
                 ParentName = parent.User.FullName,
 
                 StudentId = student.Id,

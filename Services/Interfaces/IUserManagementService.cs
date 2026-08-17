@@ -8,16 +8,18 @@ public interface IUserManagementService
         string fullName,
         string email,
         string password,
+        string phoneNumber,
+        string? employeeNumber,
                 string role);
 
-                Task<(
-            bool Success,
-            User? User,
-            string? Error
-            )> CreateSchoolAdminAsync(
-            Guid schoolId,
-            string fullName,
-            string email,
-            string phoneNumber,
-            string password);
+    Task<(
+bool Success,
+User? User,
+string? Error
+)> CreateSchoolAdminAsync(
+Guid schoolId,
+string fullName,
+string email,
+string phoneNumber,
+        string password);
 }

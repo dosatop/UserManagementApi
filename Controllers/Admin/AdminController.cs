@@ -1,13 +1,16 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using UserManagementApi.Data;
 using UserManagementApi.DTOs.Auth.Roles;
-using UserManagementApi.Models;
+using UserManagementApi.DTOs.Classes;
+using UserManagementApi.DTOs.Parents;
+using UserManagementApi.DTOs.Students;
+using UserManagementApi.DTOs.Subjects;
+using UserManagementApi.DTOs.Teachers;
+using UserManagementApi.Services;
+using UserManagementApi.Services.Interfaces;
 
 namespace UserManagementApi.Controllers;
+
 
 public abstract class SchoolAdminControllerBase : ControllerBase
 {
@@ -27,33 +30,14 @@ public abstract class SchoolAdminControllerBase : ControllerBase
 [ApiController]
 [Route("api/admin")]
 [Authorize(Roles = Roles.Admin)]
-public class AdminController(
-    ApplicationDbContext context,
-    UserManager<User> userManager) : SchoolAdminControllerBase
+public class AdminController(IAdminService adminService, ITeacherService teacherService, IStudentService studentService, IClassService classService, ISubjectService subjectService, IParentService parentService) : SchoolAdminControllerBase
 {
-    private readonly ApplicationDbContext _context = context;
-    private readonly UserManager<User> _userManager = userManager;
-
-    // ================================================================
-    // GET SCHOOL ID FROM LOGGED-IN ADMIN
-    // ================================================================
-
-    private Guid? GetSchoolId()
-    {
-        var schoolIdClaim = User.FindFirst("SchoolId")?.Value;
-
-        if (string.IsNullOrWhiteSpace(schoolIdClaim))
-        {
-            return null;
-        }
-
-        if (!Guid.TryParse(schoolIdClaim, out var schoolId))
-        {
-            return null;
-        }
-
-        return schoolId;
-    }
+    private readonly IAdminService _adminService = adminService;
+    private readonly ITeacherService _teacherService = teacherService;
+    private readonly IStudentService _studentService = studentService;
+    private readonly IClassService _classService = classService;
+    private readonly ISubjectService _subjectService = subjectService;
+    private readonly IParentService _parentService = parentService;
 
     // ================================================================
     // DASHBOARD
@@ -72,12 +56,9 @@ public class AdminController(
             });
         }
 
-        // Check school
-        var school = await _context.Schools
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == schoolId);
+        var dashboard = await _adminService.GetDashboardAsync(schoolId.Value);
 
-        if (school == null)
+        if (dashboard == null)
         {
             return NotFound(new
             {
@@ -85,53 +66,45 @@ public class AdminController(
             });
         }
 
-        // ============================================================
-        // COUNTS
-        // ============================================================
+        return Ok(dashboard);
+    }
 
-        var userCount = await _context.Users
-            .CountAsync(x => x.SchoolId == schoolId);
+    // ================================================================
+    // CREATE TEACHERS
+    // ================================================================
+    [HttpPost("teachers")]
+    public async Task<IActionResult> CreateTeacher(
+        [FromBody] CreateTeacherRequest request)
+    {
+        var schoolId = GetSchoolId();
 
-        var adminCount = (
-            from user in _context.Users
-            join userRole in _context.UserRoles
-                on user.Id equals userRole.UserId
-            join role in _context.Roles
-                on userRole.RoleId equals role.Id
-            where user.SchoolId == schoolId
-                  && role.Name == Roles.Admin
-            select user.Id
-        ).Count();
-
-        var teacherCount = await _context.Teachers
-            .CountAsync(x => x.SchoolId == schoolId);
-
-        var studentCount = await _context.StudentProfiles
-            .CountAsync(x => x.SchoolId == schoolId);
-
-        var classCount = await _context.Classes
-            .CountAsync(x => x.SchoolId == schoolId);
-
-        var subjectCount = await _context.Subjects
-            .CountAsync(x => x.SchoolId == schoolId);
-
-        return Ok(new
+        if (schoolId == null)
         {
-            schoolId = school.Id,
-            schoolName = school.Name,
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
 
-            userCount,
-            adminCount,
-            teacherCount,
-            studentCount,
-            classCount,
-            subjectCount
-        });
+        var result = await _teacherService.CreateTeacherAsync(
+            schoolId.Value,
+            request);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
     }
 
     // ================================================================
     // GET TEACHERS
     // ================================================================
+
     [HttpGet("teachers")]
     public async Task<IActionResult> GetTeachers()
     {
@@ -145,44 +118,15 @@ public class AdminController(
             });
         }
 
-        var teachers = await _context.Teachers
-            .AsNoTracking()
-            .Where(x => x.SchoolId == schoolId)
-            .Select(x => new
-            {
-                teacherId = x.Id,
-                userId = x.UserId,
-                schoolId = x.SchoolId,
-
-                // User information
-                teacherName = x.User.FullName,
-                email = x.User.Email,
-                phoneNumber = x.User.PhoneNumber,
-
-                // Classes
-                classes = x.TeacherClasses,
-
-                // Subjects assigned to teacher
-                subjects = x.TeacherSubjects
-                    .Select(ts => new
-                    {
-                        subjectId = ts.SubjectId,
-                        subjectName = ts.Subject.Name,
-                        code = ts.Subject.Code
-                    })
-                    .ToList()
-            })
-            .ToListAsync();
+        var teachers = await _adminService
+            .GetTeachersAsync(schoolId.Value);
 
         return Ok(teachers);
     }
 
-    // ================================================================
-    // GET STUDENTS
-    // ================================================================
-
-    [HttpGet("students")]
-    public async Task<IActionResult> GetStudents()
+    [HttpGet("teachers/{teacherId:guid}")]
+    public async Task<IActionResult> GetTeacher(
+    Guid teacherId)
     {
         var schoolId = GetSchoolId();
 
@@ -194,58 +138,358 @@ public class AdminController(
             });
         }
 
-        var school = await _context.Schools
-            .AsNoTracking()
-            .Where(x => x.Id == schoolId)
-            .Select(x => new
-            {
-                x.Id,
-                x.Name
-            })
-            .FirstOrDefaultAsync();
+        var result = await _teacherService.GetTeacherByIdAsync(
+            schoolId.Value,
+            teacherId);
 
-        if (school == null)
+        if (!result.Success)
         {
             return NotFound(new
             {
-                message = "School not found."
+                message = result.Error
             });
         }
 
-        var students = await _context.StudentProfiles
-            .AsNoTracking()
-            .Where(x => x.SchoolId == schoolId)
-            .Select(x => new
-            {
-                studentId = x.Id,
-                studentNumber = x.StudentNumber,
-
-                // School
-                schoolId = x.SchoolId,
-                schoolName = school.Name,
-
-                // Student
-                studentName = x.User.FullName,
-                email = x.User.Email,
-                phoneNumber = x.User.PhoneNumber,
-
-                // Class
-                classId = x.ClassId,
-                className = x.Class.Name,
-
-                // Parents
-                parents = x.Parents.Select(ps => new
-                {
-                    parentId = ps.Parent.Id,
-                    parentName = ps.Parent.User.FullName,
-                    email = ps.Parent.User.Email,
-                    phoneNumber = ps.Parent.User.PhoneNumber
-                }).ToList()
-            })
-            .ToListAsync();
-
-        return Ok(students);
+        return Ok(result.Data);
     }
+
+    [HttpPut("teachers/{teacherId:guid}")]
+    public async Task<IActionResult> UpdateTeacher(
+        Guid teacherId,
+        [FromBody] UpdateTeacherRequest request)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _teacherService.UpdateTeacherAsync(
+            schoolId.Value,
+            teacherId,
+            request);
+
+        if (!result.Success)
+        {
+            if (result.Error == "Teacher not found.")
+            {
+                return NotFound(new
+                {
+                    message = result.Error
+                });
+            }
+
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
+    [HttpDelete("teachers/{teacherId:guid}")]
+    public async Task<IActionResult> DeleteTeacher(
+        Guid teacherId)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _teacherService.DeleteTeacherAsync(
+            schoolId.Value,
+            teacherId);
+
+        if (!result.Success)
+        {
+            if (result.Error == "Teacher not found.")
+            {
+                return NotFound(new
+                {
+                    message = result.Error
+                });
+            }
+
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
+
+    // ================================================================
+    // CREATE STUDENTS
+    // ================================================================
+    [HttpPost("students")]
+    public async Task<IActionResult> CreateStudent(
+        CreateStudentRequest request)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result =
+            await _studentService.CreateStudentAsync(
+                schoolId.Value,
+                request);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
+    [HttpGet("students")]
+    public async Task<IActionResult> GetStudents(
+      [FromQuery] Guid? classId,
+      [FromQuery] Guid? subjectId)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+
+        var result = await _studentService.GetStudentsByClassOrSubjectAsync(
+            schoolId.Value,
+            classId,
+            subjectId);
+
+        if (!result.Success)
+        {
+            return NotFound(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
+    [HttpGet("students/{studentId:guid}/records")]
+    public async Task<IActionResult> GetStudent(
+       Guid studentId)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var student = await _adminService.GetStudentAsync(
+            schoolId.Value,
+            studentId);
+
+        if (student == null)
+        {
+            return NotFound(new
+            {
+                message = "Student not found."
+            });
+        }
+
+        return Ok(student);
+    }
+
+    [HttpPut("students/{studentId:guid}")]
+    public async Task<IActionResult> UpdateStudent(
+    Guid studentId,
+    UpdateStudentRequest request)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result =
+            await _studentService.UpdateStudentAsync(
+                schoolId.Value,
+                studentId,
+                request);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
+
+    [HttpDelete("students/{studentId:guid}")]
+    public async Task<IActionResult> DeleteStudent(
+        Guid studentId)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result =
+            await _studentService.DeleteStudentAsync(
+                schoolId.Value,
+                studentId);
+
+        if (!result.Success)
+        {
+            return NotFound(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(new
+        {
+            message = "Student deleted successfully."
+        });
+    }
+
+    [HttpGet("students/{studentId:guid}/assignments")]
+    public async Task<IActionResult> GetStudentAssignments(
+     Guid studentId,
+     [FromQuery] string session,
+     [FromQuery] string term)
+    {
+        var schoolId = GetSchoolId();
+
+        if (!schoolId.HasValue)
+        {
+            return Unauthorized(new
+            {
+                message = "School ID not found."
+            });
+        }
+
+        var result = await _studentService.GetStudentAssignmentsAsync(
+            schoolId.Value,
+            studentId,
+            session,
+            term);
+
+        if (!result.Success)
+        {
+            return NotFound(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
+    [HttpGet("students/{studentId:guid}/attendance")]
+    public async Task<IActionResult> GetStudentAttendance(
+        Guid studentId,
+        [FromQuery] string session,
+        [FromQuery] string term)
+    {
+        var schoolId = GetSchoolId();
+
+        if (!schoolId.HasValue)
+        {
+            return Unauthorized(new
+            {
+                message = "School ID not found."
+            });
+        }
+
+        var result = await _studentService
+            .GetStudentAttendanceAsync(
+                schoolId.Value,
+                studentId,
+                session,
+                term);
+
+        if (!result.Success)
+        {
+            return NotFound(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
+
+    // ================================================================
+    // CREATE CLASSES
+    // ================================================================
+    [HttpPost("classes")]
+    public async Task<IActionResult> CreateClass(
+        CreateClassRequest request)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _classService.CreateClassAsync(
+            schoolId.Value,
+            request);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
     // ================================================================
     // GET CLASSES
     // ================================================================
@@ -263,41 +507,231 @@ public class AdminController(
             });
         }
 
-        var classes = await _context.Classes
-            .AsNoTracking()
-            .Where(x => x.SchoolId == schoolId)
-            .Select(x => new
-            {
-                classId = x.Id,
-                className = x.Name,
-                schoolId = x.SchoolId,
-
-                // Students in this class
-                students = x.Students
-                    .Select(s => new
-                    {
-                        studentId = s.Id,
-                        studentNumber = s.StudentNumber,
-                        studentName = s.User.FullName,
-                        email = s.User.Email,
-                        phoneNumber = s.User.PhoneNumber
-                    })
-                    .ToList(),
-
-                // Teachers assigned to this class
-                teachers = x.TeacherClasses
-                    .Select(tc => new
-                    {
-                        teacherId = tc.TeacherId,
-                        teacherName = tc.Teacher.User.FullName,
-                        email = tc.Teacher.User.Email,
-                        phoneNumber = tc.Teacher.User.PhoneNumber
-                    })
-                    .ToList()
-            })
-            .ToListAsync();
+        var classes = await _adminService
+            .GetClassesAsync(schoolId.Value);
 
         return Ok(classes);
+    }
+    [HttpGet("classes/{classId:guid}")]
+    public async Task<IActionResult> GetClass(
+    Guid classId)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _classService.GetClassAsync(
+            schoolId.Value,
+            classId);
+
+        if (!result.Success)
+        {
+            return NotFound(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
+    [HttpPut("classes/{classId:guid}")]
+    public async Task<IActionResult> UpdateClass(
+        Guid classId,
+        CreateClassRequest request)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _classService.UpdateClassAsync(
+            schoolId.Value,
+            classId,
+            request);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
+    [HttpDelete("classes/{classId:guid}")]
+    public async Task<IActionResult> DeleteClass(
+        Guid classId)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _classService.DeleteClassAsync(
+            schoolId.Value,
+            classId);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(new
+        {
+            message = "Class deleted successfully."
+        });
+    }
+
+    [HttpGet("classes/{classId:guid}/assignments")]
+    public async Task<IActionResult> GetClassAssignments(
+    Guid classId,
+    [FromQuery] string session,
+    [FromQuery] string term)
+    {
+        var schoolId = GetSchoolId();
+
+        if (!schoolId.HasValue)
+        {
+            return Unauthorized(new
+            {
+                message = "School ID not found."
+            });
+        }
+
+        var result = await _classService.GetClassAssignmentsAsync(
+            schoolId.Value,
+            classId,
+            session,
+            term);
+
+        if (!result.Success)
+        {
+            return NotFound(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
+    [HttpGet("classes/{classId:guid}/assignments/count")]
+    public async Task<IActionResult> GetAssignmentCount(
+        Guid classId,
+        [FromQuery] string session,
+        [FromQuery] string term)
+    {
+        var schoolId = GetSchoolId();
+
+        if (!schoolId.HasValue)
+        {
+            return Unauthorized(new
+            {
+                message = "School ID not found."
+            });
+        }
+
+        var result = await _classService.GetAssignmentCountAsync(
+            schoolId.Value,
+            classId,
+            session,
+            term);
+
+        if (!result.Success)
+        {
+            return NotFound(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
+    [HttpGet("assignments")]
+    public async Task<IActionResult> GetSchoolAssignments(
+    [FromQuery] string session,
+    [FromQuery] string term)
+    {
+        var schoolId = GetSchoolId();
+
+        if (!schoolId.HasValue)
+        {
+            return Unauthorized(new
+            {
+                message = "School ID not found."
+            });
+        }
+
+        var result = await _classService
+            .GetSchoolAssignmentCountAsync(
+                schoolId.Value,
+                session,
+                term);
+
+        if (!result.Success)
+        {
+            return NotFound(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
+    // ================================================================
+    // CREATE SUBJECTS
+    // ================================================================
+    [HttpPost("subjects")]
+    public async Task<IActionResult> CreateSubject(
+        CreateSubjectRequest request)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _subjectService.CreateSubjectAsync(
+            schoolId.Value,
+            request);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
     }
 
     // ================================================================
@@ -317,28 +751,285 @@ public class AdminController(
             });
         }
 
-        var subjects = await _context.Subjects
-         .AsNoTracking()
-         .Where(x => x.SchoolId == schoolId)
-         .Select(x => new
-         {
-             subjectId = x.Id,
-             schoolId = x.SchoolId,
-             subjectName = x.Name,
-             code = x.Code,
-
-             teacherSubjects = x.TeacherSubjects
-                 .Select(ts => new
-                 {
-                     teacherId = ts.TeacherId,
-                     teacherName = ts.Teacher.User.FullName,
-                     email = ts.Teacher.User.Email,
-                     phoneNumber = ts.Teacher.User.PhoneNumber
-                 })
-                 .ToList()
-         })
-         .ToListAsync();
+        var subjects = await _adminService
+            .GetSubjectsAsync(schoolId.Value);
 
         return Ok(subjects);
     }
+
+
+    [HttpGet("subjects/{subjectId:guid}")]
+    public async Task<IActionResult> GetSubject(
+    Guid subjectId)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _subjectService.GetSubjectAsync(
+            schoolId.Value,
+            subjectId);
+
+        if (!result.Success)
+        {
+            return NotFound(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
+    [HttpPut("subjects/{subjectId:guid}")]
+    public async Task<IActionResult> UpdateSubject(
+        Guid subjectId,
+        CreateSubjectRequest request)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _subjectService.UpdateSubjectAsync(
+            schoolId.Value,
+            subjectId,
+            request);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
+
+    [HttpDelete("subjects/{subjectId:guid}")]
+    public async Task<IActionResult> DeleteSubject(
+        Guid subjectId)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _subjectService.DeleteSubjectAsync(
+            schoolId.Value,
+            subjectId);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(new
+        {
+            message = "Subject deleted successfully."
+        });
+    }
+
+    // ================================================================
+    // CREATE PARENTS
+    // ================================================================
+    [HttpPost("parents")]
+    public async Task<IActionResult> CreateParent(
+        CreateParentRequest request)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _parentService.CreateParentAsync(
+            schoolId.Value,
+            request);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
+    // ================================================================
+    // GET ALL PARENTS
+    // ================================================================
+
+    [HttpGet("parents")]
+    public async Task<IActionResult> GetParents()
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var parents = await _parentService.GetParentsAsync(
+            schoolId.Value);
+
+        return Ok(parents);
+    }
+
+
+    [HttpGet("parents/{parentId:guid}")]
+    public async Task<IActionResult> GetParent(Guid parentId)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _parentService.GetParentAsync(
+            schoolId.Value,
+            parentId);
+
+        if (!result.Success)
+        {
+            return NotFound(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
+
+    [HttpPut("parents/{parentId:guid}")]
+    public async Task<IActionResult> UpdateParent(
+        Guid parentId,
+        UpdateParentRequest request)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _parentService.UpdateParentAsync(
+            schoolId.Value,
+            parentId,
+            request);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
+
+    [HttpDelete("parents/{parentId:guid}")]
+    public async Task<IActionResult> DeleteParent(
+        Guid parentId)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _parentService.DeleteParentAsync(
+            schoolId.Value,
+            parentId);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(new
+        {
+            message = "Parent deleted successfully."
+        });
+    }
+
+
+    [HttpGet("classes/{classId:guid}/students")]
+    public async Task<IActionResult> GetClassStudents(
+        Guid classId,
+        [FromQuery] Guid? subjectId)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _classService.GetClassStudentsAsync(
+            schoolId.Value,
+            classId,
+            subjectId);
+
+        if (!result.Success)
+        {
+            return NotFound(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
 }
