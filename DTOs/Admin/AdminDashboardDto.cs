@@ -11,6 +11,7 @@ public class AdminDashboardDto
     public int StudentCount { get; set; }
     public int ClassCount { get; set; }
     public int SubjectCount { get; set; }
+    public int ParentCount { get; set; }
 }
 public class AdminTeacherDto
 {
@@ -76,6 +77,10 @@ public class AdminClassDto
     public string? ClassName { get; set; }
     public Guid SchoolId { get; set; }
 
+    public Guid? ClassTeacherId { get; set; }
+
+public string? ClassTeacherName { get; set; }
+
     public List<AdminClassStudentDto> Students { get; set; } = [];
     public List<AdminClassTeacherDto> Teachers { get; set; } = [];
 }
@@ -103,6 +108,21 @@ public class AdminClassTeacherDto
 
     public string? SubjectName { get; set; }
     public string? SubjectCode { get; set; }
+}
+
+public class AdminTeacherClassTeacherDto
+{
+    public Guid TeacherId { get; set; }
+
+    public string TeacherName { get; set; } = string.Empty;
+
+    public string? Email { get; set; }
+
+    public string? PhoneNumber { get; set; }
+
+    public Guid ClassId { get; set; }
+
+    public string ClassName { get; set; } = string.Empty;
 }
 
 public class AdminSubjectDto

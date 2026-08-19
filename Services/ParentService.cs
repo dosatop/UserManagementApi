@@ -91,6 +91,7 @@ public class ParentService(
                 x.ParentId,
                 x.UserId,
                 FullName = x.User.FullName,
+                ParentName = x.User.FullName,
                 Email = x.User.Email,
                 PhoneNumber = x.User.PhoneNumber,
 
@@ -116,6 +117,7 @@ public class ParentService(
                 x.UserId,
 
                 FullName = x.User.FullName,
+                ParentName = x.User.FullName,
                 Email = x.User.Email,
                 PhoneNumber = x.User.PhoneNumber,
 

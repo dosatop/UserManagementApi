@@ -135,7 +135,6 @@ public class TeacherService(
     // ================================================================
     // GET TEACHER BY ID
     // ================================================================
-
     public async Task<(bool Success, object? Data, string? Error)>
         GetTeacherByIdAsync(
             Guid schoolId,
@@ -158,7 +157,31 @@ public class TeacherService(
                 phoneNumber = x.User.PhoneNumber,
 
                 schoolId = x.SchoolId,
-                schoolName = x.School.Name
+                schoolName = x.School.Name,
+
+                // Class teacher information
+                isClassTeacher = x.TeacherClasses.Any(),
+
+                classTeacher = x.TeacherClasses
+                    .Select(tc => new
+                    {
+                        classId = tc.ClassId,
+                        className = tc.Class.Name
+                    })
+                    .FirstOrDefault(),
+
+                // Subjects taught
+                subjects = x.TeacherSubjects
+                    .Select(ts => new
+                    {
+                        subjectId = ts.SubjectId,
+                        subjectTaught = ts.Subject.Name,
+                        code = ts.Subject.Code,
+
+                        classId = ts.ClassId,
+                        className = ts.Class.Name
+                    })
+                    .ToList()
             })
             .FirstOrDefaultAsync();
 

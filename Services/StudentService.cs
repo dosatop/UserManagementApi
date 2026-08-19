@@ -127,88 +127,90 @@ public class StudentService : IStudentService
 
     // ================================================================
     // GET ALL
-    // ================================================================
-public async Task<(bool Success, object? Data, string? Error)>
-    GetStudentsByClassOrSubjectAsync(
-        Guid schoolId,
-        Guid? classId,
-        Guid? subjectId)
-{
+    public async Task<(bool Success, object? Data, string? Error)>
+       GetStudentsByClassOrSubjectAsync(
+           Guid schoolId,
+           Guid? classId,
+           Guid? subjectId)
+    {
+        // Validate class if supplied
+        if (classId.HasValue)
+        {
+            var classExists = await _context.Classes.AnyAsync(x =>
+                x.Id == classId.Value &&
+                x.SchoolId == schoolId);
+
+            if (!classExists)
+            {
+                return (false, null, "Class not found in this school.");
+            }
+        }
+
+        // Validate subject if supplied
+        if (subjectId.HasValue)
+        {
+            var subjectExists = await _context.Subjects.AnyAsync(x =>
+                x.Id == subjectId.Value &&
+                x.SchoolId == schoolId);
+
+            if (!subjectExists)
+            {
+                return (false, null, "Subject not found in this school.");
+            }
+        }
+
+        // Start with ALL students in this school
+        var query = _context.StudentProfiles
+            .AsNoTracking()
+            .Where(x => x.SchoolId == schoolId);
+
+        // If class was supplied
+        if (classId.HasValue)
+        {
+            query = query.Where(x =>
+                x.ClassId == classId.Value);
+        }
+
+        // If subject was supplied
+        if (subjectId.HasValue)
+        {
+            query = query.Where(student =>
+                _context.TeacherSubjects.Any(ts =>
+                    ts.ClassId == student.ClassId &&
+                    ts.SubjectId == subjectId.Value
+                ));
+        }
+
+        var students = await query
+            .Select(x => new
+            {
+                StudentId = x.Id,
+                StudentNumber = x.StudentNumber,
+                StudentName = x.User.FullName,
+
+                ClassId = x.ClassId,
+                ClassName = x.Class.Name,
+
+                // Number of parents linked to this student
+                ParentCount = x.Parents.Count()
+            })
+            .OrderBy(x => x.ClassName)
+            .ThenBy(x => x.StudentName)
+            .ToListAsync();
+
+        return (
+            true,
+            new
+            {
+                ClassId = classId,
+                SubjectId = subjectId,
+                StudentCount = students.Count,
+                Students = students
+            },
+            null
+        );
+    }
     
-    // Validate class if supplied
-    if (classId.HasValue)
-    {
-        var classExists = await _context.Classes.AnyAsync(x =>
-            x.Id == classId.Value &&
-            x.SchoolId == schoolId);
-
-        if (!classExists)
-        {
-            return (false, null, "Class not found in this school.");
-        }
-    }
-
-    // Validate subject if supplied
-    if (subjectId.HasValue)
-    {
-        var subjectExists = await _context.Subjects.AnyAsync(x =>
-            x.Id == subjectId.Value &&
-            x.SchoolId == schoolId);
-
-        if (!subjectExists)
-        {
-            return (false, null, "Subject not found in this school.");
-        }
-    }
-
-    // Start with ALL students in this school
-    var query = _context.StudentProfiles
-        .AsNoTracking()
-        .Where(x => x.SchoolId == schoolId);
-
-    // If class was supplied
-    if (classId.HasValue)
-    {
-        query = query.Where(x =>
-            x.ClassId == classId.Value);
-    }
-
-    // If subject was supplied
-    if (subjectId.HasValue)
-    {
-        query = query.Where(student =>
-            _context.TeacherSubjects.Any(ts =>
-                ts.ClassId == student.ClassId &&
-                ts.SubjectId == subjectId.Value
-            ));
-    }
-
-    var students = await query
-        .Select(x => new
-        {
-            StudentId = x.Id,
-            StudentNumber = x.StudentNumber,
-            StudentName = x.User.FullName,
-
-            ClassId = x.ClassId,
-            ClassName = x.Class.Name
-        })
-        .OrderBy(x => x.ClassName)
-        .ThenBy(x => x.StudentName)
-        .ToListAsync();
-
-    return (
-        true,
-        new
-        {
-            ClassId = classId,
-            SubjectId = subjectId,
-            StudentCount = students.Count,
-            Students = students
-        },
-        null
-    );
-}
     // ================================================================
     // GET BY ID
     // ================================================================

@@ -51,6 +51,9 @@ public class AdminService(ApplicationDbContext context) : IAdminService
         var subjectCount = await _context.Subjects
             .CountAsync(x => x.SchoolId == schoolId);
 
+        var parentCount = await _context.Parents
+            .CountAsync(x => x.SchoolId == schoolId);
+
         return new AdminDashboardDto
         {
             SchoolId = school.Id,
@@ -61,53 +64,54 @@ public class AdminService(ApplicationDbContext context) : IAdminService
             TeacherCount = teacherCount,
             StudentCount = studentCount,
             ClassCount = classCount,
-            SubjectCount = subjectCount
+            SubjectCount = subjectCount,
+            ParentCount = parentCount
         };
     }
 
     // ================================================================
     // TEACHERS
     // ================================================================
-public async Task<List<AdminTeacherDto>> GetTeachersAsync(Guid schoolId)
-{
-    return await _context.Teachers
-        .AsNoTracking()
-        .Where(x => x.SchoolId == schoolId)
-        .Select(x => new AdminTeacherDto
-        {
-            TeacherId = x.Id,
-            UserId = x.UserId,
-            SchoolId = x.SchoolId,
+    public async Task<List<AdminTeacherDto>> GetTeachersAsync(Guid schoolId)
+    {
+        return await _context.Teachers
+            .AsNoTracking()
+            .Where(x => x.SchoolId == schoolId)
+            .Select(x => new AdminTeacherDto
+            {
+                TeacherId = x.Id,
+                UserId = x.UserId,
+                SchoolId = x.SchoolId,
 
-            TeacherName = x.User.FullName,
-            Email = x.User.Email,
-            PhoneNumber = x.User.PhoneNumber,
+                TeacherName = x.User.FullName,
+                Email = x.User.Email,
+                PhoneNumber = x.User.PhoneNumber,
 
-            // Class teacher information
-            IsClassTeacher = x.TeacherClasses.Any(),
+                // Class teacher information
+                IsClassTeacher = x.TeacherClasses.Any(),
 
-            ClassTeacher = x.TeacherClasses
-                .Select(tc => new AdminClassTeacherDto
-                {
-                    ClassId = tc.ClassId,
-                    ClassName = tc.Class.Name
-                })
-                .FirstOrDefault(),
+                ClassTeacher = x.TeacherClasses
+                    .Select(tc => new AdminClassTeacherDto
+                    {
+                        ClassId = tc.ClassId,
+                        ClassName = tc.Class.Name
+                    })
+                    .FirstOrDefault(),
 
-            Subjects = x.TeacherSubjects
-                .Select(ts => new AdminTeacherSubjectDto
-                {
-                    SubjectId = ts.SubjectId,
-                    SubjectName = ts.Subject.Name,
-                    Code = ts.Subject.Code,
+                Subjects = x.TeacherSubjects
+                    .Select(ts => new AdminTeacherSubjectDto
+                    {
+                        SubjectId = ts.SubjectId,
+                        SubjectName = ts.Subject.Name,
+                        Code = ts.Subject.Code,
 
-                    ClassId = ts.ClassId,
-                    ClassName = ts.Class.Name
-                })
-                .ToList()
-        })
-        .ToListAsync();
-}
+                        ClassId = ts.ClassId,
+                        ClassName = ts.Class.Name
+                    })
+                    .ToList()
+            })
+            .ToListAsync();
+    }
 
     // ================================================================
     // STUDENTS
@@ -164,194 +168,194 @@ public async Task<List<AdminTeacherDto>> GetTeachersAsync(Guid schoolId)
     public async Task<AdminStudentDto?> GetStudentAsync(
     Guid schoolId,
     Guid studentId)
-{
-    var student = await _context.StudentProfiles
-        .AsNoTracking()
-        .Where(x =>
-            x.Id == studentId &&
-            x.SchoolId == schoolId)
-        .Select(x => new AdminStudentDto
-        {
-            StudentId = x.Id,
-            StudentNumber = x.StudentNumber,
-
-            SchoolId = x.SchoolId,
-            SchoolName = x.School.Name,
-
-            StudentName = x.User.FullName,
-            Email = x.User.Email,
-            PhoneNumber = x.User.PhoneNumber,
-
-            ClassId = x.ClassId,
-            ClassName = x.Class.Name,
-
-            Parents = x.Parents
-                .Select(ps => new AdminParentDto
-                {
-                    ParentId = ps.Parent.ParentId,
-                    ParentName = ps.Parent.User.FullName,
-                    Email = ps.Parent.User.Email,
-                    PhoneNumber = ps.Parent.User.PhoneNumber
-                })
-                .ToList()
-        })
-        .FirstOrDefaultAsync();
-
-    if (student == null)
     {
-        return null;
+        var student = await _context.StudentProfiles
+            .AsNoTracking()
+            .Where(x =>
+                x.Id == studentId &&
+                x.SchoolId == schoolId)
+            .Select(x => new AdminStudentDto
+            {
+                StudentId = x.Id,
+                StudentNumber = x.StudentNumber,
+
+                SchoolId = x.SchoolId,
+                SchoolName = x.School.Name,
+
+                StudentName = x.User.FullName,
+                Email = x.User.Email,
+                PhoneNumber = x.User.PhoneNumber,
+
+                ClassId = x.ClassId,
+                ClassName = x.Class.Name,
+
+                Parents = x.Parents
+                    .Select(ps => new AdminParentDto
+                    {
+                        ParentId = ps.Parent.ParentId,
+                        ParentName = ps.Parent.User.FullName,
+                        Email = ps.Parent.User.Email,
+                        PhoneNumber = ps.Parent.User.PhoneNumber
+                    })
+                    .ToList()
+            })
+            .FirstOrDefaultAsync();
+
+        if (student == null)
+        {
+            return null;
+        }
+
+        // ============================================================
+        // SUBJECTS
+        // ============================================================
+
+        student.Subjects = await _context.Subjects
+            .AsNoTracking()
+            .Where(x => x.SchoolId == schoolId)
+            .OrderBy(x => x.Name)
+            .Select(x => new AdminStudentSubjectDto
+            {
+                SubjectId = x.Id,
+                SubjectName = x.Name,
+                Code = x.Code
+            })
+            .ToListAsync();
+
+        // ============================================================
+        // RESULTS
+        // ============================================================
+
+        student.Results = await _context.StudentResults
+            .AsNoTracking()
+            .Where(x =>
+                x.StudentId == studentId &&
+                x.SchoolId == schoolId)
+            .OrderByDescending(x => x.Session)
+            .ThenBy(x => x.Term)
+            .Select(x => new AdminStudentResultDto
+            {
+                Id = x.Id,
+
+                SubjectId = x.SubjectId,
+                SubjectName = x.Subject.Name,
+
+                TestScore = x.TestScore,
+                ExamScore = x.ExamScore,
+                Score = x.Score,
+
+                Grade = x.Grade,
+                Remark = x.Remark,
+
+                Session = x.Session,
+                Term = x.Term
+            })
+            .ToListAsync();
+
+        // ============================================================
+        // ATTENDANCE
+        // ============================================================
+
+        student.Attendance = await _context.AttendanceRecords
+            .AsNoTracking()
+            .Where(x =>
+                x.StudentId == studentId &&
+                x.SchoolId == schoolId)
+            .OrderByDescending(x => x.AttendanceDate)
+            .Select(x => new AdminStudentAttendanceDto
+            {
+                Id = x.Id,
+
+                AttendanceDate = x.AttendanceDate,
+
+                Status = x.Status.ToString(),
+
+                Remarks = x.Remarks,
+
+                SubjectId = x.SubjectId,
+
+                SubjectName = x.Subject != null
+                    ? x.Subject.Name
+                    : null,
+
+                TeacherId = x.TeacherId,
+
+                TeacherName = x.Teacher != null
+                    ? x.Teacher.User.FullName
+                    : null,
+
+                ClassId = x.ClassId,
+                SchoolId = x.SchoolId,
+
+                Session = x.Session,
+                Term = x.Term
+            })
+            .ToListAsync();
+
+        // ============================================================
+        // ASSIGNMENTS
+        // ============================================================
+
+        student.Assignments = await _context.Assignments
+            .AsNoTracking()
+            .Where(x =>
+                x.ClassId == student.ClassId &&
+                x.SchoolId == schoolId)
+            .OrderByDescending(x => x.AssignedAt)
+            .Select(x => new AdminStudentAssignmentDto
+            {
+                AssignmentId = x.Id,
+
+                Title = x.Title,
+                Description = x.Description,
+                AttachmentUrl = x.AttachmentUrl,
+
+                AssignedAt = x.AssignedAt,
+                DueDate = x.DueDate,
+
+                Session = x.Session,
+                Term = x.Term,
+
+                ClassId = x.ClassId,
+                ClassName = x.Class.Name,
+
+                SubjectId = x.SubjectId,
+                SubjectName = x.Subject.Name,
+
+                TeacherId = x.TeacherId,
+                TeacherName = x.Teacher.User.FullName,
+
+                IsPublished = x.IsPublished,
+
+                Submission = x.Submissions
+                    .Where(s => s.StudentId == studentId)
+                    .Select(s => new AdminAssignmentSubmissionDto
+                    {
+                        Id = s.Id,
+
+                        SubmissionText = s.SubmissionText,
+                        AttachmentUrl = s.AttachmentUrl,
+
+                        SubmittedAt = s.SubmittedAt,
+
+                        Score = s.Score,
+                        Feedback = s.Feedback,
+
+                        IsGraded = s.IsGraded,
+                        GradedAt = s.GradedAt
+                    })
+                    .FirstOrDefault()
+            })
+            .ToListAsync();
+
+        return student;
     }
-
-    // ============================================================
-    // SUBJECTS
-    // ============================================================
-
-    student.Subjects = await _context.Subjects
-        .AsNoTracking()
-        .Where(x => x.SchoolId == schoolId)
-        .OrderBy(x => x.Name)
-        .Select(x => new AdminStudentSubjectDto
-        {
-            SubjectId = x.Id,
-            SubjectName = x.Name,
-            Code = x.Code
-        })
-        .ToListAsync();
-
-    // ============================================================
-    // RESULTS
-    // ============================================================
-
-    student.Results = await _context.StudentResults
-        .AsNoTracking()
-        .Where(x =>
-            x.StudentId == studentId &&
-            x.SchoolId == schoolId)
-        .OrderByDescending(x => x.Session)
-        .ThenBy(x => x.Term)
-        .Select(x => new AdminStudentResultDto
-        {
-            Id = x.Id,
-
-            SubjectId = x.SubjectId,
-            SubjectName = x.Subject.Name,
-
-            TestScore = x.TestScore,
-            ExamScore = x.ExamScore,
-            Score = x.Score,
-
-            Grade = x.Grade,
-            Remark = x.Remark,
-
-            Session = x.Session,
-            Term = x.Term
-        })
-        .ToListAsync();
-
-    // ============================================================
-    // ATTENDANCE
-    // ============================================================
-
-    student.Attendance = await _context.AttendanceRecords
-        .AsNoTracking()
-        .Where(x =>
-            x.StudentId == studentId &&
-            x.SchoolId == schoolId)
-        .OrderByDescending(x => x.AttendanceDate)
-        .Select(x => new AdminStudentAttendanceDto
-        {
-            Id = x.Id,
-
-            AttendanceDate = x.AttendanceDate,
-
-            Status = x.Status.ToString(),
-
-            Remarks = x.Remarks,
-
-            SubjectId = x.SubjectId,
-
-            SubjectName = x.Subject != null
-                ? x.Subject.Name
-                : null,
-
-            TeacherId = x.TeacherId,
-
-            TeacherName = x.Teacher != null
-                ? x.Teacher.User.FullName
-                : null,
-
-            ClassId = x.ClassId,
-            SchoolId = x.SchoolId,
-
-            Session = x.Session,
-            Term = x.Term
-        })
-        .ToListAsync();
-
-    // ============================================================
-    // ASSIGNMENTS
-    // ============================================================
-
-    student.Assignments = await _context.Assignments
-        .AsNoTracking()
-        .Where(x =>
-            x.ClassId == student.ClassId &&
-            x.SchoolId == schoolId)
-        .OrderByDescending(x => x.AssignedAt)
-        .Select(x => new AdminStudentAssignmentDto
-        {
-            AssignmentId = x.Id,
-
-            Title = x.Title,
-            Description = x.Description,
-            AttachmentUrl = x.AttachmentUrl,
-
-            AssignedAt = x.AssignedAt,
-            DueDate = x.DueDate,
-
-            Session = x.Session,
-            Term = x.Term,
-
-            ClassId = x.ClassId,
-            ClassName = x.Class.Name,
-
-            SubjectId = x.SubjectId,
-            SubjectName = x.Subject.Name,
-
-            TeacherId = x.TeacherId,
-            TeacherName = x.Teacher.User.FullName,
-
-            IsPublished = x.IsPublished,
-
-            Submission = x.Submissions
-                .Where(s => s.StudentId == studentId)
-                .Select(s => new AdminAssignmentSubmissionDto
-                {
-                    Id = s.Id,
-
-                    SubmissionText = s.SubmissionText,
-                    AttachmentUrl = s.AttachmentUrl,
-
-                    SubmittedAt = s.SubmittedAt,
-
-                    Score = s.Score,
-                    Feedback = s.Feedback,
-
-                    IsGraded = s.IsGraded,
-                    GradedAt = s.GradedAt
-                })
-                .FirstOrDefault()
-        })
-        .ToListAsync();
-
-    return student;
-}
 
     // ================================================================
     // CLASSES
     // ================================================================
 
-public async Task<List<AdminClassDto>> GetClassesAsync(Guid schoolId)
+ public async Task<List<AdminClassDto>> GetClassesAsync(Guid schoolId)
 {
     return await _context.Classes
         .AsNoTracking()
@@ -361,6 +365,18 @@ public async Task<List<AdminClassDto>> GetClassesAsync(Guid schoolId)
             ClassId = x.Id,
             ClassName = x.Name,
             SchoolId = x.SchoolId,
+
+            // ========================================================
+            // CLASS TEACHER
+            // ========================================================
+
+            ClassTeacherId = x.TeacherClasses
+                .Select(tc => (Guid?)tc.TeacherId)
+                .FirstOrDefault(),
+
+            ClassTeacherName = x.TeacherClasses
+                .Select(tc => tc.Teacher.User.FullName)
+                .FirstOrDefault(),
 
             // ========================================================
             // STUDENTS
@@ -392,7 +408,10 @@ public async Task<List<AdminClassDto>> GetClassesAsync(Guid schoolId)
 
                     SubjectId = ts.SubjectId,
                     SubjectName = ts.Subject.Name,
-                    SubjectCode = ts.Subject.Code
+                    SubjectCode = ts.Subject.Code,
+
+                    ClassId = ts.ClassId,
+                    ClassName = ts.Class.Name
                 })
                 .ToList()
         })

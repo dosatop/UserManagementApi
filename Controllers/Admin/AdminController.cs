@@ -512,6 +512,8 @@ public class AdminController(IAdminService adminService, ITeacherService teacher
 
         return Ok(classes);
     }
+
+    
     [HttpGet("classes/{classId:guid}")]
     public async Task<IActionResult> GetClass(
     Guid classId)

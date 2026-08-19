@@ -204,9 +204,12 @@ public class ApplicationDbContext(
 
         // One class can have only ONE class teacher
         builder.Entity<TeacherClass>()
-            .HasIndex(tc => tc.ClassId)
-            .IsUnique();
-
+     .HasIndex(tc => new
+     {
+         tc.TeacherId,
+         tc.ClassId
+     })
+     .IsUnique();
         // ============================================================
         // TEACHER SUBJECT
         // ============================================================
@@ -238,7 +241,38 @@ public class ApplicationDbContext(
             .WithMany(c => c.TeacherSubjects)
             .HasForeignKey(ts => ts.ClassId)
             .OnDelete(DeleteBehavior.Restrict);
+        // ============================================================
+        // CLASS TEACHER
+        // ============================================================
 
+        builder.Entity<ClassTeacher>()
+            .HasKey(ct => ct.Id);
+
+        // School → ClassTeachers
+        builder.Entity<ClassTeacher>()
+            .HasOne<School>()
+            .WithMany()
+            .HasForeignKey(ct => ct.SchoolId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Teacher → ClassTeacher
+        builder.Entity<ClassTeacher>()
+            .HasOne(ct => ct.Teacher)
+            .WithMany()
+            .HasForeignKey(ct => ct.TeacherId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Class → ClassTeacher
+        builder.Entity<ClassTeacher>()
+            .HasOne(ct => ct.Class)
+            .WithMany()
+            .HasForeignKey(ct => ct.ClassId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // One class can have only ONE class teacher
+        builder.Entity<ClassTeacher>()
+            .HasIndex(ct => ct.ClassId)
+            .IsUnique();
 
         // Prevent duplicate assignments
         builder.Entity<TeacherSubject>()

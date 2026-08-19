@@ -89,31 +89,172 @@ public class ClassService : IClassService
             .ToListAsync();
     }
 
-    public async Task<(bool Success, object? Data, string? Error)>
-        GetClassAsync(
-            Guid schoolId,
-            Guid classId)
-    {
-        var classroom = await _context.Classes
-            .AsNoTracking()
-            .Where(x =>
-                x.Id == classId &&
-                x.SchoolId == schoolId)
-            .Select(x => new
-            {
-                x.Id,
-                x.Name,
-                x.SchoolId
-            })
-            .FirstOrDefaultAsync();
-
-        if (classroom == null)
+ public async Task<(bool Success, object? Data, string? Error)>
+    GetClassAsync(
+        Guid schoolId,
+        Guid classId)
+{
+    var classroom = await _context.Classes
+        .AsNoTracking()
+        .Where(x =>
+            x.Id == classId &&
+            x.SchoolId == schoolId)
+        .Select(x => new
         {
-            return (false, null, "Class not found.");
-        }
+            // ========================================================
+            // CLASS
+            // ========================================================
 
-        return (true, classroom, null);
+            ClassId = x.Id,
+            ClassName = x.Name,
+            SchoolId = x.SchoolId,
+
+            // ========================================================
+            // CLASS TEACHER
+            // ========================================================
+
+            ClassTeacherId = x.TeacherClasses
+                .Select(tc => (Guid?)tc.TeacherId)
+                .FirstOrDefault(),
+
+            ClassTeacherName = x.TeacherClasses
+                .Select(tc => tc.Teacher.User.FullName)
+                .FirstOrDefault(),
+
+            // ========================================================
+            // SUBJECTS
+            // ========================================================
+
+            Subjects = x.TeacherSubjects
+                .Select(ts => new
+                {
+                    SubjectId = ts.SubjectId,
+                    SubjectName = ts.Subject.Name,
+                    SubjectCode = ts.Subject.Code
+                })
+                .Distinct()
+                .ToList(),
+
+            // ========================================================
+            // TEACHERS
+            // ========================================================
+
+            Teachers = x.TeacherSubjects
+                .Select(ts => new
+                {
+                    TeacherId = ts.TeacherId,
+
+                    TeacherName = ts.Teacher.User.FullName,
+                    Email = ts.Teacher.User.Email,
+                    PhoneNumber = ts.Teacher.User.PhoneNumber,
+
+                    SubjectId = ts.SubjectId,
+                    SubjectName = ts.Subject.Name,
+                    SubjectCode = ts.Subject.Code,
+
+                    ClassId = ts.ClassId,
+                    ClassName = ts.Class.Name
+                })
+                .ToList(),
+
+            // ========================================================
+            // STUDENTS
+            // ========================================================
+
+            Students = x.Students
+                .Select(s => new
+                {
+                    StudentId = s.Id,
+                    StudentNumber = s.StudentNumber,
+                    StudentName = s.User.FullName,
+                    Email = s.User.Email,
+                    PhoneNumber = s.User.PhoneNumber,
+
+                    // =================================================
+                    // PARENTS
+                    // =================================================
+
+                    ParentCount = s.Parents.Count(),
+
+                    // =================================================
+                    // RESULTS
+                    // =================================================
+
+                    Results = _context.StudentResults
+                        .Where(r =>
+                            r.StudentId == s.Id &&
+                            r.ClassId == x.Id &&
+                            r.SchoolId == schoolId)
+                        .Select(r => new
+                        {
+                            ResultId = r.Id,
+
+                            SubjectId = r.SubjectId,
+                            SubjectName = r.Subject.Name,
+                            SubjectCode = r.Subject.Code,
+
+                            Session = r.Session,
+                            Term = r.Term,
+
+                            TestScore = r.TestScore,
+                            ExamScore = r.ExamScore,
+                            Score = r.Score,
+
+                            Grade = r.Grade,
+                            Remark = r.Remark,
+
+                            CreatedAt = r.CreatedAt
+                        })
+                        .ToList(),
+
+                    // =================================================
+                    // ATTENDANCE
+                    // =================================================
+
+                    Attendance = _context.AttendanceRecords
+                        .Where(a =>
+                            a.StudentId == s.Id &&
+                            a.ClassId == x.Id &&
+                            a.SchoolId == schoolId)
+                        .Select(a => new
+                        {
+                            AttendanceId = a.Id,
+
+                            SubjectId = a.SubjectId,
+                            SubjectName = a.Subject.Name,
+                            SubjectCode = a.Subject.Code,
+
+                            TeacherId = a.TeacherId,
+                            TeacherName = a.Teacher.User.FullName,
+
+                            AttendanceDate = a.AttendanceDate,
+
+                            Status = a.Status,
+
+                            Session = a.Session,
+                            Term = a.Term
+                        })
+                        .ToList()
+                })
+                .ToList()
+        })
+        .FirstOrDefaultAsync();
+
+    if (classroom == null)
+    {
+        return (
+            false,
+            null,
+            "Class not found."
+        );
     }
+
+    return (
+        true,
+        classroom,
+        null
+    );
+}
 
     public async Task<(bool Success, object? Data, string? Error)>
         UpdateClassAsync(
