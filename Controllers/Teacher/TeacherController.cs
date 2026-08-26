@@ -17,10 +17,12 @@ namespace UserManagementApi.Controllers;
 public class TeacherController(
     ITeacherPortalService teacherService,
     ICurrentUserService currentUser,
+    IResultService resultService,
     ApplicationDbContext context) : ControllerBase
 {
     private readonly ITeacherPortalService _teacherService = teacherService;
     private readonly ICurrentUserService _currentUser = currentUser;
+    private readonly IResultService _resultService = resultService;
     private readonly ApplicationDbContext _context = context;
 
 
@@ -127,161 +129,421 @@ public class TeacherController(
         return Ok(result.Data);
     }
 
+  // ============================================================
+        // GET RESULTS
+        // ============================================================
 
-    // ================================================================
-    // RESULTS
-    // ================================================================
-
-    [HttpGet("results")]
-    public async Task<IActionResult> GetResults(
-        [FromQuery] GetTeacherResultsRequest request)
-    {
-        var userId = GetUserId();
-
-        if (string.IsNullOrWhiteSpace(userId))
+        [HttpGet("results")]
+        public async Task<IActionResult> GetResults(
+            [FromQuery] GetTeacherResultsRequest request)
         {
-            return Unauthorized(new
+            var userId = GetUserId();
+
+            if (string.IsNullOrEmpty(userId))
             {
-                message = "User identity could not be determined."
-            });
+                return Unauthorized(new
+                {
+                    message = "User authentication is required."
+                });
+            }
+
+            var result = await _resultService.GetResultsAsync(
+                userId,
+                request);
+
+            if (!result.Success)
+            {
+                return BadRequest(new
+                {
+                    message = result.Error
+                });
+            }
+
+            return Ok(result.Data);
         }
 
-        var teacher = await _context.Teachers
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x =>
-                x.UserId == userId);
 
-        if (teacher == null)
+        // ============================================================
+        // CREATE COMPLETE RESULT
+        // TEST + EXAM
+        // ============================================================
+
+        [HttpPost("results")]
+        public async Task<IActionResult> CreateResult(
+            [FromBody] UploadResultRequest request)
         {
-            return NotFound(new
+            var userId = GetUserId();
+
+            if (string.IsNullOrEmpty(userId))
             {
-                message = "Teacher profile not found."
-            });
+                return Unauthorized(new
+                {
+                    message = "User authentication is required."
+                });
+            }
+
+            var result = await _resultService.UploadResultAsync(
+                userId,
+                request);
+
+            if (!result.Success)
+            {
+                return BadRequest(new
+                {
+                    message = result.Error
+                });
+            }
+
+            return Ok(result.Data);
         }
 
-        var result = await _teacherService.GetResultsAsync(
-            teacher.SchoolId,
-            teacher.Id,
-            request);
 
-        if (!result.Success)
+        // ============================================================
+        // CREATE TEST RESULT
+        // ============================================================
+
+        [HttpPost("results/test")]
+        public async Task<IActionResult> CreateTestResult(
+            [FromBody] UploadTestResultRequest request)
         {
-            return BadRequest(new
+            var userId = GetUserId();
+
+            if (string.IsNullOrEmpty(userId))
             {
-                message = result.Error
-            });
+                return Unauthorized(new
+                {
+                    message = "User authentication is required."
+                });
+            }
+
+            var result = await _resultService.UploadTestResultAsync(
+                userId,
+                request);
+
+            if (!result.Success)
+            {
+                return BadRequest(new
+                {
+                    message = result.Error
+                });
+            }
+
+            return Ok(result.Data);
         }
 
-        return Ok(result.Data);
-    }
 
+        // ============================================================
+        // CREATE EXAM RESULT
+        // ============================================================
 
-    // ================================================================
-    // CREATE RESULT
-    // ================================================================
-
-    [HttpPost("results")]
-    public async Task<IActionResult> CreateResult(
-        [FromBody] CreateResultRequest request)
-    {
-        var userId = GetUserId();
-
-        if (string.IsNullOrWhiteSpace(userId))
+        [HttpPost("results/exam")]
+        public async Task<IActionResult> CreateExamResult(
+            [FromBody] UploadExamResultRequest request)
         {
-            return Unauthorized(new
+            var userId = GetUserId();
+
+            if (string.IsNullOrEmpty(userId))
             {
-                message = "User identity could not be determined."
-            });
+                return Unauthorized(new
+                {
+                    message = "User authentication is required."
+                });
+            }
+
+            var result = await _resultService.UploadExamResultAsync(
+                userId,
+                request);
+
+            if (!result.Success)
+            {
+                return BadRequest(new
+                {
+                    message = result.Error
+                });
+            }
+
+            return Ok(result.Data);
         }
 
-        var result = await _teacherService.CreateResultAsync(
-            userId,
-            request);
 
-        if (!result.Success)
+        // ============================================================
+        // BULK COMPLETE RESULTS
+        // ============================================================
+
+        [HttpPost("results/bulk")]
+        public async Task<IActionResult> BulkResults(
+            [FromBody] BulkResultRequest request)
         {
-            return BadRequest(new
+            var userId = GetUserId();
+
+            if (string.IsNullOrEmpty(userId))
             {
-                message = result.Error
-            });
+                return Unauthorized(new
+                {
+                    message = "User authentication is required."
+                });
+            }
+
+            var result = await _resultService.BulkResultAsync(
+                userId,
+                request);
+
+            if (!result.Success)
+            {
+                return BadRequest(new
+                {
+                    message = result.Error
+                });
+            }
+
+            return Ok(result.Data);
         }
 
-        return Ok(result.Data);
-    }
 
+        // ============================================================
+        // BULK TEST RESULTS
+        // ============================================================
 
-    // ================================================================
-    // UPDATE RESULT
-    // ================================================================
-
-    [HttpPut("results/{resultId:guid}")]
-    public async Task<IActionResult> UpdateResult(
-        Guid resultId,
-        [FromBody] CreateResultRequest request)
-    {
-        var userId = GetUserId();
-
-        if (string.IsNullOrWhiteSpace(userId))
+        [HttpPost("results/bulk/test")]
+        public async Task<IActionResult> BulkTestResults(
+            [FromBody] BulkTestResultRequest request)
         {
-            return Unauthorized(new
+            var userId = GetUserId();
+
+            if (string.IsNullOrEmpty(userId))
             {
-                message = "User identity could not be determined."
-            });
+                return Unauthorized(new
+                {
+                    message = "User authentication is required."
+                });
+            }
+
+            var result = await _resultService.BulkTestResultAsync(
+                userId,
+                request);
+
+            if (!result.Success)
+            {
+                return BadRequest(new
+                {
+                    message = result.Error
+                });
+            }
+
+            return Ok(result.Data);
         }
 
-        var result = await _teacherService.UpdateResultAsync(
-            userId,
-            resultId,
-            request);
 
-        if (!result.Success)
+        // ============================================================
+        // BULK EXAM RESULTS
+        // ============================================================
+
+        [HttpPost("results/bulk/exam")]
+        public async Task<IActionResult> BulkExamResults(
+            [FromBody] BulkExamResultRequest request)
         {
-            return BadRequest(new
+            var userId = GetUserId();
+
+            if (string.IsNullOrEmpty(userId))
             {
-                message = result.Error
-            });
+                return Unauthorized(new
+                {
+                    message = "User authentication is required."
+                });
+            }
+
+            var result = await _resultService.BulkExamResultAsync(
+                userId,
+                request);
+
+            if (!result.Success)
+            {
+                return BadRequest(new
+                {
+                    message = result.Error
+                });
+            }
+
+            return Ok(result.Data);
         }
 
-        return Ok(result.Data);
-    }
 
+        // ============================================================
+        // UPDATE COMPLETE RESULT
+        // ============================================================
 
-    // ================================================================
-    // DELETE RESULT
-    // ================================================================
-
-    [HttpDelete("results/{resultId:guid}")]
-    public async Task<IActionResult> DeleteResult(
-        Guid resultId)
-    {
-        var userId = GetUserId();
-
-        if (string.IsNullOrWhiteSpace(userId))
+        [HttpPut("results/{resultId:guid}")]
+        public async Task<IActionResult> UpdateResult(
+            Guid resultId,
+            [FromBody] UpdateResultRequest request)
         {
-            return Unauthorized(new
+            var userId = GetUserId();
+
+            if (string.IsNullOrEmpty(userId))
             {
-                message = "User identity could not be determined."
-            });
+                return Unauthorized(new
+                {
+                    message = "User authentication is required."
+                });
+            }
+
+            var result = await _resultService.UpdateResultAsync(
+                userId,
+                resultId,
+                request);
+
+            if (!result.Success)
+            {
+                if (result.Error == "Result not found.")
+                {
+                    return NotFound(new
+                    {
+                        message = result.Error
+                    });
+                }
+
+                return BadRequest(new
+                {
+                    message = result.Error
+                });
+            }
+
+            return Ok(result.Data);
         }
 
-        var result = await _teacherService.DeleteResultAsync(
-            userId,
-            resultId);
 
-        if (!result.Success)
+        // ============================================================
+        // UPDATE TEST ONLY
+        // ============================================================
+
+        [HttpPut("results/{resultId:guid}/test")]
+        public async Task<IActionResult> UpdateTestResult(
+            Guid resultId,
+            [FromBody] UpdateTestResultRequest request)
         {
-            return BadRequest(new
+            var userId = GetUserId();
+
+            if (string.IsNullOrEmpty(userId))
             {
-                message = result.Error
-            });
+                return Unauthorized(new
+                {
+                    message = "User authentication is required."
+                });
+            }
+
+            var result = await _resultService.UpdateTestResultAsync(
+                userId,
+                resultId,
+                request);
+
+            if (!result.Success)
+            {
+                if (result.Error == "Result not found.")
+                {
+                    return NotFound(new
+                    {
+                        message = result.Error
+                    });
+                }
+
+                return BadRequest(new
+                {
+                    message = result.Error
+                });
+            }
+
+            return Ok(result.Data);
         }
 
-        return Ok(new
-        {
-            message = "Result deleted successfully."
-        });
-    }
 
+        // ============================================================
+        // UPDATE EXAM ONLY
+        // ============================================================
+
+        [HttpPut("results/{resultId:guid}/exam")]
+        public async Task<IActionResult> UpdateExamResult(
+            Guid resultId,
+            [FromBody] UpdateExamResultRequest request)
+        {
+            var userId = GetUserId();
+
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized(new
+                {
+                    message = "User authentication is required."
+                });
+            }
+
+            var result = await _resultService.UpdateExamResultAsync(
+                userId,
+                resultId,
+                request);
+
+            if (!result.Success)
+            {
+                if (result.Error == "Result not found.")
+                {
+                    return NotFound(new
+                    {
+                        message = result.Error
+                    });
+                }
+
+                return BadRequest(new
+                {
+                    message = result.Error
+                });
+            }
+
+            return Ok(result.Data);
+        }
+
+
+        // ============================================================
+        // DELETE RESULT
+        // ============================================================
+
+        [HttpDelete("results/{resultId:guid}")]
+        public async Task<IActionResult> DeleteResult(
+            Guid resultId)
+        {
+            var userId = GetUserId();
+
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized(new
+                {
+                    message = "User authentication is required."
+                });
+            }
+
+            var result = await _resultService.DeleteResultAsync(
+                userId,
+                resultId);
+
+            if (!result.Success)
+            {
+                if (result.Error == "Result not found.")
+                {
+                    return NotFound(new
+                    {
+                        message = result.Error
+                    });
+                }
+
+                return BadRequest(new
+                {
+                    message = result.Error
+                });
+            }
+
+            return Ok(new
+            {
+                message = "Result deleted successfully.",
+                data = result.Data
+            });
+        }
 
     // ================================================================
     // ASSIGNMENTS

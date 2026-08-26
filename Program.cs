@@ -123,6 +123,10 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
 IAcademicSessionService,
 AcademicSessionService>();
+builder.Services.AddScoped<IResultImportService, ResultImportService>();
+
+builder.Services.AddScoped<IResultService, ResultService>();
+
 builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<ITeacherPortalService, TeacherPortalService>();
 builder.Services.AddQuartz(q =>

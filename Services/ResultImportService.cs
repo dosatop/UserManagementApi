@@ -111,11 +111,11 @@ public class ResultImportService(
             Session = request.Session,
             Term = request.Term,
 
-            Score = request.Score,
+            // Score = request.Score,
             ExamScore = request.ExamScore,
             TestScore = request.TestScore,
 
-            Grade = CalculateGrade(request.Score),
+            // Grade = CalculateGrade(request.Score),
 
             Remark = request.Remark,
 
@@ -321,12 +321,12 @@ public class ResultImportService(
             );
         }
 
-        result.Score = request.Score;
+        // result.Score = request.Score;
         result.ExamScore = request.ExamScore;
         result.TestScore = request.TestScore;
         result.Remark = request.Remark;
 
-        result.Grade = CalculateGrade(request.Score);
+        // result.Grade = CalculateGrade(request.Score);
 
         await _context.SaveChangesAsync();
 

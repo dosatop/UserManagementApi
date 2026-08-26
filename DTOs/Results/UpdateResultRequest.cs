@@ -1,12 +1,13 @@
-namespace UserManagementApi.DTOs.Results;
+using System.ComponentModel.DataAnnotations;
 
+namespace UserManagementApi.DTOs.Results;
 public class UpdateResultRequest
 {
-    public decimal Score { get; set; }
+    [Range(0, 40)]
+    public decimal TestScore { get; set; }
 
-    public decimal? ExamScore { get; set; }
-
-    public decimal? TestScore { get; set; }
+    [Range(0, 60)]
+    public decimal ExamScore { get; set; }
 
     public string? Remark { get; set; }
 }

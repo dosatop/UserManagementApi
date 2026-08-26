@@ -31,15 +31,19 @@ public class StudentResult
 
     public string Term { get; set; } = string.Empty;
 
-    // Score
+    // Scores
     public decimal Score { get; set; }
-     public string Grade { get; set; } = string.Empty;
 
     public decimal? ExamScore { get; set; }
 
     public decimal? TestScore { get; set; }
 
-    // Optional teacher remark
+    // Automatically calculated
+    public string Grade { get; set; } = string.Empty;
+
+    public string GradeRemark { get; set; } = string.Empty;
+
+    // Teacher/admin comment
     public string? Remark { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

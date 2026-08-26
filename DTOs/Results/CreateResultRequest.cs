@@ -12,7 +12,7 @@ public class CreateResultRequest
 
     public string Term { get; set; } = string.Empty;
 
-    public decimal Score { get; set; }
+    // public decimal Score { get; set; }
 
     public decimal? ExamScore { get; set; }
 

@@ -26,31 +26,7 @@ public interface ITeacherPortalService
     Task<(bool Success, object? Data, string? Error)>
         GetSubjectsAsync(string userId);
 
-    // ================================================================
-    // RESULTS
-    // ================================================================
 
-    Task<(bool Success, object? Data, string? Error)>
-        GetResultsAsync(
-            Guid schoolId,
-            Guid teacherId,
-            GetTeacherResultsRequest request);
-
-    Task<(bool Success, object? Data, string? Error)>
-        CreateResultAsync(
-            string userId,
-            CreateResultRequest request);
-
-    Task<(bool Success, object? Data, string? Error)>
-        UpdateResultAsync(
-            string userId,
-            Guid resultId,
-            CreateResultRequest request);
-
-    Task<(bool Success, string? Error)>
-        DeleteResultAsync(
-            string userId,
-            Guid resultId);
 
     // ================================================================
     // ASSIGNMENTS
@@ -111,4 +87,5 @@ public interface ITeacherPortalService
         DeleteAttendanceAsync(
             string userId,
             Guid attendanceId);
+
 }

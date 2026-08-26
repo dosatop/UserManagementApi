@@ -351,13 +351,13 @@ public class TeacherPortalService(
     }
 
     // ================================================================
-    // CREATE RESULT
+    // BULK EXAM RESULT
     // ================================================================
 
     public async Task<(bool Success, object? Data, string? Error)>
-        CreateResultAsync(
+        BulkExamResultAsync(
             string userId,
-            CreateResultRequest request)
+            BulkExamResultRequest request)
     {
         // ============================================================
         // GET TEACHER
@@ -383,14 +383,13 @@ public class TeacherPortalService(
         // CURRENT ACADEMIC PERIOD
         // ============================================================
 
-        var currentAcademicPeriod =
-            await _context.AcademicSessions
-                .AsNoTracking()
-                .FirstOrDefaultAsync(x =>
-                    x.SchoolId == schoolId &&
-                    x.IsCurrent);
+        var period = await _context.AcademicSessions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.SchoolId == schoolId &&
+                x.IsCurrent);
 
-        if (currentAcademicPeriod == null)
+        if (period == null)
         {
             return (
                 false,
@@ -399,100 +398,21 @@ public class TeacherPortalService(
             );
         }
 
-        var currentSession =
-            currentAcademicPeriod.Session;
-
-        var currentTerm =
-            currentAcademicPeriod.Term;
+        var currentSession = period.Session;
+        var currentTerm = period.Term;
 
         // ============================================================
-        // TEACHER CANNOT CHOOSE ANOTHER SESSION
+        // VALIDATE CLASS
         // ============================================================
 
-        if (!string.Equals(
-                request.Session,
-                currentSession,
-                StringComparison.OrdinalIgnoreCase))
-        {
-            return (
-                false,
-                null,
-                $"Results can only be uploaded for the current session: {currentSession}."
-            );
-        }
-
-        // ============================================================
-        // TEACHER CANNOT CHOOSE ANOTHER TERM
-        // ============================================================
-
-        if (!string.Equals(
-                request.Term,
-                currentTerm,
-                StringComparison.OrdinalIgnoreCase))
-        {
-            return (
-                false,
-                null,
-                $"Results can only be uploaded for the current term: {currentTerm}."
-            );
-        }
-
-        // ============================================================
-        // CHECK STUDENT
-        // ============================================================
-
-        var student = await _context.StudentProfiles
+        var classExists = await _context.TeacherClasses
             .AsNoTracking()
-            .Where(x =>
-                x.Id == request.StudentId &&
-                x.SchoolId == schoolId)
-            .Select(x => new
-            {
-                x.Id,
-                x.UserId,
-                x.SchoolId,
-                x.ClassId,
+            .AnyAsync(x =>
+                x.TeacherId == teacher.Id &&
+                x.ClassId == request.ClassId &&
+                x.Class.SchoolId == schoolId);
 
-                studentName = x.User.FullName,
-                studentNumber = x.StudentNumber,
-
-                className = x.Class.Name
-            })
-            .FirstOrDefaultAsync();
-
-        if (student == null)
-        {
-            return (
-                false,
-                null,
-                "Student not found in this school."
-            );
-        }
-
-        // ============================================================
-        // STUDENT MUST BELONG TO REQUESTED CLASS
-        // ============================================================
-
-        if (student.ClassId != request.ClassId)
-        {
-            return (
-                false,
-                null,
-                "The selected class does not belong to this student."
-            );
-        }
-
-        // ============================================================
-        // TEACHER MUST TEACH THIS CLASS
-        // ============================================================
-
-        var teachesClass =
-            await _context.TeacherClasses
-                .AnyAsync(x =>
-                    x.TeacherId == teacher.Id &&
-                    x.ClassId == request.ClassId);
-
-        if (!teachesClass)
+        if (!classExists)
         {
             return (
                 false,
@@ -502,7 +422,7 @@ public class TeacherPortalService(
         }
 
         // ============================================================
-        // CHECK SUBJECT
+        // VALIDATE SUBJECT
         // ============================================================
 
         var subject = await _context.Subjects
@@ -528,14 +448,15 @@ public class TeacherPortalService(
         }
 
         // ============================================================
-        // TEACHER MUST TEACH THIS SUBJECT
+        // TEACHER MUST TEACH SUBJECT
         // ============================================================
 
-        var teachesSubject =
-            await _context.TeacherSubjects
-                .AnyAsync(x =>
-                    x.TeacherId == teacher.Id &&
-                    x.SubjectId == request.SubjectId);
+        var teachesSubject = await _context.TeacherSubjects
+            .AsNoTracking()
+            .AnyAsync(x =>
+                x.TeacherId == teacher.Id &&
+                x.SubjectId == request.SubjectId &&
+                x.Subject.SchoolId == schoolId);
 
         if (!teachesSubject)
         {
@@ -547,73 +468,262 @@ public class TeacherPortalService(
         }
 
         // ============================================================
-        // CHECK DUPLICATE
+        // VALIDATE RESULTS
         // ============================================================
 
-        var exists = await _context.StudentResults
-            .AnyAsync(x =>
-                x.StudentId == request.StudentId &&
-                x.SubjectId == request.SubjectId &&
+        if (request.Results == null ||
+            request.Results.Count == 0)
+        {
+            return (
+                false,
+                null,
+                "At least one student result is required."
+            );
+        }
+
+        // ============================================================
+        // CHECK DUPLICATE STUDENTS IN REQUEST
+        // ============================================================
+
+        var duplicateStudentIds = request.Results
+            .GroupBy(x => x.StudentId)
+            .Where(x => x.Count() > 1)
+            .Select(x => x.Key)
+            .ToList();
+
+        if (duplicateStudentIds.Count > 0)
+        {
+            return (
+                false,
+                null,
+                "The same student cannot appear more than once in the upload."
+            );
+        }
+
+        // ============================================================
+        // VALIDATE EXAM SCORES
+        // ============================================================
+
+        var invalidScore = request.Results
+            .FirstOrDefault(x =>
+                x.ExamScore < 0 ||
+                x.ExamScore > 60);
+
+        if (invalidScore != null)
+        {
+            return (
+                false,
+                null,
+                $"Exam score for student {invalidScore.StudentId} must be between 0 and 60."
+            );
+        }
+
+        // ============================================================
+        // STUDENT IDS
+        // ============================================================
+
+        var studentIds = request.Results
+            .Select(x => x.StudentId)
+            .ToList();
+
+        // ============================================================
+        // GET STUDENTS
+        // ============================================================
+
+        var students = await _context.StudentProfiles
+            .AsNoTracking()
+            .Where(x =>
+                studentIds.Contains(x.Id) &&
+                x.SchoolId == schoolId &&
+                x.ClassId == request.ClassId)
+            .Select(x => new
+            {
+                x.Id,
+                x.ClassId,
+
+                studentName = x.User.FullName,
+                studentNumber = x.StudentNumber
+            })
+            .ToListAsync();
+
+        // ============================================================
+        // CHECK ALL STUDENTS EXIST IN CLASS
+        // ============================================================
+
+        var foundStudentIds = students
+            .Select(x => x.Id)
+            .ToHashSet();
+
+        var invalidStudents = studentIds
+            .Where(x => !foundStudentIds.Contains(x))
+            .ToList();
+
+        if (invalidStudents.Count > 0)
+        {
+            return (
+                false,
+                null,
+                "One or more students were not found in the selected class."
+            );
+        }
+
+        // ============================================================
+        // GET EXISTING RESULTS
+        // ============================================================
+
+        var existingResults = await _context.StudentResults
+            .Where(x =>
+                x.SchoolId == schoolId &&
                 x.ClassId == request.ClassId &&
+                x.SubjectId == request.SubjectId &&
                 x.Session == currentSession &&
                 x.Term == currentTerm &&
-                x.SchoolId == schoolId);
+                studentIds.Contains(x.StudentId))
+            .ToListAsync();
 
-        if (exists)
+        var existingByStudent = existingResults
+            .ToDictionary(x => x.StudentId);
+
+        // ============================================================
+        // PROCESS RESULTS
+        // ============================================================
+
+        var uploadedResults = new List<object>();
+
+        foreach (var item in request.Results)
         {
-            return (
-                false,
-                null,
-                "A result already exists for this student, subject, session and term."
-            );
+            // --------------------------------------------------------
+            // EXISTING RESULT
+            // --------------------------------------------------------
+
+            if (existingByStudent.TryGetValue(
+                    item.StudentId,
+                    out var result))
+            {
+                // Preserve the existing test score.
+                var testScore = result.TestScore ?? 0m;
+
+                // Update only exam.
+                result.ExamScore = item.ExamScore;
+
+                // Recalculate total.
+                result.Score =
+                    testScore +
+                    item.ExamScore;
+
+                // Recalculate grade.
+                result.Grade =
+                    CalculateGrade(result.Score);
+
+                // Update remark if supplied.
+                result.Remark = item.Remark;
+
+                var student = students
+                    .First(x => x.Id == item.StudentId);
+
+                uploadedResults.Add(new
+                {
+                    resultId = result.Id,
+
+                    studentId = result.StudentId,
+                    studentName = student.studentName,
+                    studentNumber = student.studentNumber,
+
+                    classId = result.ClassId,
+
+                    subjectId = result.SubjectId,
+                    subjectName = subject.Name,
+                    subjectCode = subject.Code,
+
+                    testScore = result.TestScore,
+                    examScore = result.ExamScore,
+
+                    score = result.Score,
+                    grade = result.Grade,
+
+                    remark = result.Remark,
+
+                    session = result.Session,
+                    term = result.Term
+                });
+            }
+            else
+            {
+                // ----------------------------------------------------
+                // CREATE NEW RESULT
+                // ----------------------------------------------------
+
+                var totalScore =
+                    item.ExamScore;
+
+                var grade =
+                    CalculateGrade(totalScore);
+
+                var newResult =
+                    new Models.Results.StudentResult
+                    {
+                        Id = Guid.NewGuid(),
+
+                        StudentId = item.StudentId,
+                        SchoolId = schoolId,
+
+                        ClassId = request.ClassId,
+                        SubjectId = request.SubjectId,
+
+                        Session = currentSession,
+                        Term = currentTerm,
+
+                        // Test has not been uploaded yet.
+                        TestScore = 0m,
+
+                        ExamScore = item.ExamScore,
+
+                        // Test 0 + Exam
+                        Score = totalScore,
+
+                        Grade = grade,
+
+                        Remark = item.Remark,
+
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                _context.StudentResults.Add(newResult);
+
+                var student = students
+                    .First(x => x.Id == item.StudentId);
+
+                uploadedResults.Add(new
+                {
+                    resultId = newResult.Id,
+
+                    studentId = newResult.StudentId,
+                    studentName = student.studentName,
+                    studentNumber = student.studentNumber,
+
+                    classId = newResult.ClassId,
+
+                    subjectId = newResult.SubjectId,
+                    subjectName = subject.Name,
+                    subjectCode = subject.Code,
+
+                    testScore = newResult.TestScore,
+                    examScore = newResult.ExamScore,
+
+                    score = newResult.Score,
+                    grade = newResult.Grade,
+
+                    remark = newResult.Remark,
+
+                    session = newResult.Session,
+                    term = newResult.Term
+                });
+            }
         }
 
         // ============================================================
-        // VALIDATE SCORE
+        // SAVE
         // ============================================================
-
-        if (request.Score < 0 || request.Score > 100)
-        {
-            return (
-                false,
-                null,
-                "Score must be between 0 and 100."
-            );
-        }
-
-        // ============================================================
-        // CALCULATE GRADE
-        // ============================================================
-
-        var grade = CalculateGrade(request.Score);
-
-        // ============================================================
-        // CREATE
-        // ============================================================
-
-        var result = new Models.Results.StudentResult
-        {
-            Id = Guid.NewGuid(),
-
-            StudentId = student.Id,
-            SchoolId = schoolId,
-            SubjectId = subject.Id,
-            ClassId = student.ClassId,
-
-            Session = currentSession,
-            Term = currentTerm,
-
-            Score = request.Score,
-            ExamScore = request.ExamScore,
-            TestScore = request.TestScore,
-
-            Grade = grade,
-            Remark = request.Remark,
-
-            CreatedAt = DateTime.UtcNow
-        };
-
-        _context.StudentResults.Add(result);
 
         await _context.SaveChangesAsync();
 
@@ -625,46 +735,34 @@ public class TeacherPortalService(
             true,
             new
             {
-                resultId = result.Id,
-
                 schoolId,
 
-                studentId = student.Id,
-                studentName = student.studentName,
-                studentNumber = student.studentNumber,
-
-                classId = student.ClassId,
-                className = student.className,
+                classId = request.ClassId,
 
                 subjectId = subject.Id,
                 subjectName = subject.Name,
                 subjectCode = subject.Code,
 
-                session = result.Session,
-                term = result.Term,
+                session = currentSession,
+                term = currentTerm,
 
-                score = result.Score,
-                examScore = result.ExamScore,
-                testScore = result.TestScore,
+                uploadedCount = uploadedResults.Count,
 
-                grade = result.Grade,
-                remark = result.Remark,
-
-                createdAt = result.CreatedAt
+                results = uploadedResults
             },
             null
         );
     }
 
+
     // ================================================================
-    // UPDATE RESULT
+    // BULK TEST RESULT
     // ================================================================
 
     public async Task<(bool Success, object? Data, string? Error)>
-        UpdateResultAsync(
+        BulkTestResultAsync(
             string userId,
-            Guid resultId,
-            CreateResultRequest request)
+            BulkTestResultRequest request)
     {
         // ============================================================
         // GET TEACHER
@@ -687,17 +785,16 @@ public class TeacherPortalService(
         var schoolId = teacher.SchoolId;
 
         // ============================================================
-        // CURRENT PERIOD
+        // CURRENT ACADEMIC PERIOD
         // ============================================================
 
-        var currentAcademicPeriod =
-            await _context.AcademicSessions
-                .AsNoTracking()
-                .FirstOrDefaultAsync(x =>
-                    x.SchoolId == schoolId &&
-                    x.IsCurrent);
+        var period = await _context.AcademicSessions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.SchoolId == schoolId &&
+                x.IsCurrent);
 
-        if (currentAcademicPeriod == null)
+        if (period == null)
         {
             return (
                 false,
@@ -706,55 +803,21 @@ public class TeacherPortalService(
             );
         }
 
-        var currentSession =
-            currentAcademicPeriod.Session;
-
-        var currentTerm =
-            currentAcademicPeriod.Term;
+        var currentSession = period.Session;
+        var currentTerm = period.Term;
 
         // ============================================================
-        // GET RESULT
+        // VALIDATE CLASS
         // ============================================================
 
-        var result = await _context.StudentResults
-            .FirstOrDefaultAsync(x =>
-                x.Id == resultId &&
-                x.SchoolId == schoolId);
+        var classExists = await _context.TeacherClasses
+            .AsNoTracking()
+            .AnyAsync(x =>
+                x.TeacherId == teacher.Id &&
+                x.ClassId == request.ClassId &&
+                x.Class.SchoolId == schoolId);
 
-        if (result == null)
-        {
-            return (
-                false,
-                null,
-                "Result not found."
-            );
-        }
-
-        // ============================================================
-        // RESULT MUST BE CURRENT
-        // ============================================================
-
-        if (result.Session != currentSession ||
-            result.Term != currentTerm)
-        {
-            return (
-                false,
-                null,
-                "Only results for the current term can be edited."
-            );
-        }
-
-        // ============================================================
-        // TEACHER MUST TEACH ORIGINAL CLASS
-        // ============================================================
-
-        var teachesOriginalClass =
-            await _context.TeacherClasses
-                .AnyAsync(x =>
-                    x.TeacherId == teacher.Id &&
-                    x.ClassId == result.ClassId);
-
-        if (!teachesOriginalClass)
+        if (!classExists)
         {
             return (
                 false,
@@ -764,16 +827,43 @@ public class TeacherPortalService(
         }
 
         // ============================================================
-        // TEACHER MUST TEACH ORIGINAL SUBJECT
+        // VALIDATE SUBJECT
         // ============================================================
 
-        var teachesOriginalSubject =
-            await _context.TeacherSubjects
-                .AnyAsync(x =>
-                    x.TeacherId == teacher.Id &&
-                    x.SubjectId == result.SubjectId);
+        var subject = await _context.Subjects
+            .AsNoTracking()
+            .Where(x =>
+                x.Id == request.SubjectId &&
+                x.SchoolId == schoolId)
+            .Select(x => new
+            {
+                x.Id,
+                x.Name,
+                x.Code
+            })
+            .FirstOrDefaultAsync();
 
-        if (!teachesOriginalSubject)
+        if (subject == null)
+        {
+            return (
+                false,
+                null,
+                "Subject not found in this school."
+            );
+        }
+
+        // ============================================================
+        // TEACHER MUST TEACH SUBJECT
+        // ============================================================
+
+        var teachesSubject = await _context.TeacherSubjects
+            .AsNoTracking()
+            .AnyAsync(x =>
+                x.TeacherId == teacher.Id &&
+                x.SubjectId == request.SubjectId &&
+                x.Subject.SchoolId == schoolId);
+
+        if (!teachesSubject)
         {
             return (
                 false,
@@ -783,7 +873,781 @@ public class TeacherPortalService(
         }
 
         // ============================================================
-        // GET NEW STUDENT
+        // VALIDATE RESULTS
+        // ============================================================
+
+        if (request.Results == null ||
+            request.Results.Count == 0)
+        {
+            return (
+                false,
+                null,
+                "At least one student result is required."
+            );
+        }
+
+        // ============================================================
+        // CHECK DUPLICATE STUDENTS IN REQUEST
+        // ============================================================
+
+        var duplicateStudentIds = request.Results
+            .GroupBy(x => x.StudentId)
+            .Where(x => x.Count() > 1)
+            .Select(x => x.Key)
+            .ToList();
+
+        if (duplicateStudentIds.Count > 0)
+        {
+            return (
+                false,
+                null,
+                "The same student cannot appear more than once in the upload."
+            );
+        }
+
+        // ============================================================
+        // VALIDATE TEST SCORES
+        // ============================================================
+
+        var invalidScore = request.Results
+            .FirstOrDefault(x =>
+                x.TestScore < 0 ||
+                x.TestScore > 40);
+
+        if (invalidScore != null)
+        {
+            return (
+                false,
+                null,
+                $"Test score for student {invalidScore.StudentId} must be between 0 and 40."
+            );
+        }
+
+        // ============================================================
+        // STUDENT IDS
+        // ============================================================
+
+        var studentIds = request.Results
+            .Select(x => x.StudentId)
+            .ToList();
+
+        // ============================================================
+        // GET STUDENTS
+        // ============================================================
+
+        var students = await _context.StudentProfiles
+            .AsNoTracking()
+            .Where(x =>
+                studentIds.Contains(x.Id) &&
+                x.SchoolId == schoolId &&
+                x.ClassId == request.ClassId)
+            .Select(x => new
+            {
+                x.Id,
+                x.ClassId,
+
+                studentName = x.User.FullName,
+                studentNumber = x.StudentNumber
+            })
+            .ToListAsync();
+
+        // ============================================================
+        // CHECK ALL STUDENTS EXIST IN CLASS
+        // ============================================================
+
+        var foundStudentIds = students
+            .Select(x => x.Id)
+            .ToHashSet();
+
+        var invalidStudents = studentIds
+            .Where(x => !foundStudentIds.Contains(x))
+            .ToList();
+
+        if (invalidStudents.Count > 0)
+        {
+            return (
+                false,
+                null,
+                "One or more students were not found in the selected class."
+            );
+        }
+
+        // ============================================================
+        // GET EXISTING RESULTS
+        // ============================================================
+
+        var existingResults = await _context.StudentResults
+            .Where(x =>
+                x.SchoolId == schoolId &&
+                x.ClassId == request.ClassId &&
+                x.SubjectId == request.SubjectId &&
+                x.Session == currentSession &&
+                x.Term == currentTerm &&
+                studentIds.Contains(x.StudentId))
+            .ToListAsync();
+
+        var existingByStudent = existingResults
+            .ToDictionary(x => x.StudentId);
+
+        // ============================================================
+        // PROCESS RESULTS
+        // ============================================================
+
+        var uploadedResults = new List<object>();
+
+        foreach (var item in request.Results)
+        {
+            // ========================================================
+            // EXISTING RESULT
+            // ========================================================
+
+            if (existingByStudent.TryGetValue(
+                    item.StudentId,
+                    out var result))
+            {
+                // Preserve existing exam score.
+                var examScore = result.ExamScore ?? 0m;
+
+                // Update only test.
+                result.TestScore = item.TestScore;
+
+                // Recalculate total.
+                result.Score =
+                    item.TestScore +
+                    examScore;
+
+                // Recalculate grade.
+                result.Grade =
+                    CalculateGrade(result.Score);
+
+                // Update remark.
+                result.Remark = item.Remark;
+
+                var student = students
+                    .First(x => x.Id == item.StudentId);
+
+                uploadedResults.Add(new
+                {
+                    resultId = result.Id,
+
+                    studentId = result.StudentId,
+                    studentName = student.studentName,
+                    studentNumber = student.studentNumber,
+
+                    classId = result.ClassId,
+
+                    subjectId = result.SubjectId,
+                    subjectName = subject.Name,
+                    subjectCode = subject.Code,
+
+                    testScore = result.TestScore,
+                    examScore = result.ExamScore,
+
+                    score = result.Score,
+                    grade = result.Grade,
+
+                    remark = result.Remark,
+
+                    session = result.Session,
+                    term = result.Term
+                });
+            }
+            else
+            {
+                // ====================================================
+                // CREATE NEW RESULT
+                // ====================================================
+
+                var totalScore =
+                    item.TestScore;
+
+                var grade =
+                    CalculateGrade(totalScore);
+
+                var newResult =
+                    new Models.Results.StudentResult
+                    {
+                        Id = Guid.NewGuid(),
+
+                        StudentId = item.StudentId,
+                        SchoolId = schoolId,
+
+                        ClassId = request.ClassId,
+                        SubjectId = request.SubjectId,
+
+                        Session = currentSession,
+                        Term = currentTerm,
+
+                        // Test uploaded.
+                        TestScore = item.TestScore,
+
+                        // Exam has not been uploaded yet.
+                        ExamScore = 0m,
+
+                        // Test + Exam
+                        Score = totalScore,
+
+                        Grade = grade,
+
+                        Remark = item.Remark,
+
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                _context.StudentResults.Add(newResult);
+
+                var student = students
+                    .First(x => x.Id == item.StudentId);
+
+                uploadedResults.Add(new
+                {
+                    resultId = newResult.Id,
+
+                    studentId = newResult.StudentId,
+                    studentName = student.studentName,
+                    studentNumber = student.studentNumber,
+
+                    classId = newResult.ClassId,
+
+                    subjectId = newResult.SubjectId,
+                    subjectName = subject.Name,
+                    subjectCode = subject.Code,
+
+                    testScore = newResult.TestScore,
+                    examScore = newResult.ExamScore,
+
+                    score = newResult.Score,
+                    grade = newResult.Grade,
+
+                    remark = newResult.Remark,
+
+                    session = newResult.Session,
+                    term = newResult.Term
+                });
+            }
+        }
+
+        // ============================================================
+        // SAVE
+        // ============================================================
+
+        await _context.SaveChangesAsync();
+
+        // ============================================================
+        // RESPONSE
+        // ============================================================
+
+        return (
+            true,
+            new
+            {
+                schoolId,
+
+                classId = request.ClassId,
+
+                subjectId = subject.Id,
+                subjectName = subject.Name,
+                subjectCode = subject.Code,
+
+                session = currentSession,
+                term = currentTerm,
+
+                uploadedCount = uploadedResults.Count,
+
+                results = uploadedResults
+            },
+            null
+        );
+    }
+
+    // ================================================================
+    // BULK TEST + EXAM RESULT
+    // ================================================================
+
+    public async Task<(bool Success, object? Data, string? Error)>
+        BulkResultAsync(
+            string userId,
+            BulkResultRequest request)
+    {
+        // ============================================================
+        // GET TEACHER
+        // ============================================================
+
+        var teacher = await _context.Teachers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.UserId == userId);
+
+        if (teacher == null)
+        {
+            return (
+                false,
+                null,
+                "Teacher profile not found."
+            );
+        }
+
+        var schoolId = teacher.SchoolId;
+
+        // ============================================================
+        // CURRENT ACADEMIC PERIOD
+        // ============================================================
+
+        var period = await _context.AcademicSessions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.SchoolId == schoolId &&
+                x.IsCurrent);
+
+        if (period == null)
+        {
+            return (
+                false,
+                null,
+                "There is no active academic session."
+            );
+        }
+
+        var currentSession = period.Session;
+        var currentTerm = period.Term;
+
+        // ============================================================
+        // VALIDATE CLASS
+        // ============================================================
+
+        var classExists = await _context.TeacherClasses
+            .AsNoTracking()
+            .AnyAsync(x =>
+                x.TeacherId == teacher.Id &&
+                x.ClassId == request.ClassId &&
+                x.Class.SchoolId == schoolId);
+
+        if (!classExists)
+        {
+            return (
+                false,
+                null,
+                "You are not assigned to this class."
+            );
+        }
+
+        // ============================================================
+        // VALIDATE SUBJECT
+        // ============================================================
+
+        var subject = await _context.Subjects
+            .AsNoTracking()
+            .Where(x =>
+                x.Id == request.SubjectId &&
+                x.SchoolId == schoolId)
+            .Select(x => new
+            {
+                x.Id,
+                x.Name,
+                x.Code
+            })
+            .FirstOrDefaultAsync();
+
+        if (subject == null)
+        {
+            return (
+                false,
+                null,
+                "Subject not found in this school."
+            );
+        }
+
+        // ============================================================
+        // TEACHER MUST TEACH SUBJECT
+        // ============================================================
+
+        var teachesSubject = await _context.TeacherSubjects
+            .AsNoTracking()
+            .AnyAsync(x =>
+                x.TeacherId == teacher.Id &&
+                x.SubjectId == request.SubjectId &&
+                x.Subject.SchoolId == schoolId);
+
+        if (!teachesSubject)
+        {
+            return (
+                false,
+                null,
+                "You are not assigned to this subject."
+            );
+        }
+
+        // ============================================================
+        // VALIDATE RESULTS
+        // ============================================================
+
+        if (request.Results == null ||
+            request.Results.Count == 0)
+        {
+            return (
+                false,
+                null,
+                "At least one student result is required."
+            );
+        }
+
+        // ============================================================
+        // CHECK DUPLICATE STUDENTS
+        // ============================================================
+
+        var duplicateStudentIds = request.Results
+            .GroupBy(x => x.StudentId)
+            .Where(x => x.Count() > 1)
+            .Select(x => x.Key)
+            .ToList();
+
+        if (duplicateStudentIds.Count > 0)
+        {
+            return (
+                false,
+                null,
+                "The same student cannot appear more than once in the upload."
+            );
+        }
+
+        // ============================================================
+        // VALIDATE TEST SCORES
+        // ============================================================
+
+        var invalidTestScore = request.Results
+            .FirstOrDefault(x =>
+                x.TestScore < 0 ||
+                x.TestScore > 40);
+
+        if (invalidTestScore != null)
+        {
+            return (
+                false,
+                null,
+                $"Test score for student {invalidTestScore.StudentId} must be between 0 and 40."
+            );
+        }
+
+        // ============================================================
+        // VALIDATE EXAM SCORES
+        // ============================================================
+
+        var invalidExamScore = request.Results
+            .FirstOrDefault(x =>
+                x.ExamScore < 0 ||
+                x.ExamScore > 60);
+
+        if (invalidExamScore != null)
+        {
+            return (
+                false,
+                null,
+                $"Exam score for student {invalidExamScore.StudentId} must be between 0 and 60."
+            );
+        }
+
+        // ============================================================
+        // STUDENT IDS
+        // ============================================================
+
+        var studentIds = request.Results
+            .Select(x => x.StudentId)
+            .ToList();
+
+        // ============================================================
+        // GET STUDENTS
+        // ============================================================
+
+        var students = await _context.StudentProfiles
+            .AsNoTracking()
+            .Where(x =>
+                studentIds.Contains(x.Id) &&
+                x.SchoolId == schoolId &&
+                x.ClassId == request.ClassId)
+            .Select(x => new
+            {
+                x.Id,
+                x.ClassId,
+
+                studentName = x.User.FullName,
+                studentNumber = x.StudentNumber
+            })
+            .ToListAsync();
+
+        // ============================================================
+        // CHECK ALL STUDENTS EXIST
+        // ============================================================
+
+        var foundStudentIds = students
+            .Select(x => x.Id)
+            .ToHashSet();
+
+        var invalidStudents = studentIds
+            .Where(x => !foundStudentIds.Contains(x))
+            .ToList();
+
+        if (invalidStudents.Count > 0)
+        {
+            return (
+                false,
+                null,
+                "One or more students were not found in the selected class."
+            );
+        }
+
+        // ============================================================
+        // GET EXISTING RESULTS
+        // ============================================================
+
+        var existingResults = await _context.StudentResults
+            .Where(x =>
+                x.SchoolId == schoolId &&
+                x.ClassId == request.ClassId &&
+                x.SubjectId == request.SubjectId &&
+                x.Session == currentSession &&
+                x.Term == currentTerm &&
+                studentIds.Contains(x.StudentId))
+            .ToListAsync();
+
+        var existingByStudent = existingResults
+            .ToDictionary(x => x.StudentId);
+
+        // ============================================================
+        // PROCESS RESULTS
+        // ============================================================
+
+        var uploadedResults = new List<object>();
+
+        foreach (var item in request.Results)
+        {
+            // ========================================================
+            // CALCULATE TOTAL
+            // ========================================================
+
+            var totalScore =
+                item.TestScore +
+                item.ExamScore;
+
+            // ========================================================
+            // CALCULATE GRADE
+            // ========================================================
+
+            var grade =
+                CalculateGrade(totalScore);
+
+            // ========================================================
+            // EXISTING RESULT
+            // ========================================================
+
+            if (existingByStudent.TryGetValue(
+                    item.StudentId,
+                    out var result))
+            {
+                result.TestScore = item.TestScore;
+                result.ExamScore = item.ExamScore;
+
+                result.Score = totalScore;
+
+                result.Grade = grade;
+
+                result.Remark = item.Remark;
+
+                var student = students
+                    .First(x => x.Id == item.StudentId);
+
+                uploadedResults.Add(new
+                {
+                    resultId = result.Id,
+
+                    studentId = result.StudentId,
+                    studentName = student.studentName,
+                    studentNumber = student.studentNumber,
+
+                    classId = result.ClassId,
+
+                    subjectId = result.SubjectId,
+                    subjectName = subject.Name,
+                    subjectCode = subject.Code,
+
+                    testScore = result.TestScore,
+                    examScore = result.ExamScore,
+
+                    score = result.Score,
+                    grade = result.Grade,
+
+                    remark = result.Remark,
+
+                    session = result.Session,
+                    term = result.Term
+                });
+            }
+            else
+            {
+                // ====================================================
+                // CREATE NEW RESULT
+                // ====================================================
+
+                var newResult =
+                    new Models.Results.StudentResult
+                    {
+                        Id = Guid.NewGuid(),
+
+                        StudentId = item.StudentId,
+                        SchoolId = schoolId,
+
+                        ClassId = request.ClassId,
+                        SubjectId = request.SubjectId,
+
+                        Session = currentSession,
+                        Term = currentTerm,
+
+                        TestScore = item.TestScore,
+                        ExamScore = item.ExamScore,
+
+                        Score = totalScore,
+
+                        Grade = grade,
+
+                        Remark = item.Remark,
+
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                _context.StudentResults.Add(newResult);
+
+                var student = students
+                    .First(x => x.Id == item.StudentId);
+
+                uploadedResults.Add(new
+                {
+                    resultId = newResult.Id,
+
+                    studentId = newResult.StudentId,
+                    studentName = student.studentName,
+                    studentNumber = student.studentNumber,
+
+                    classId = newResult.ClassId,
+
+                    subjectId = newResult.SubjectId,
+                    subjectName = subject.Name,
+                    subjectCode = subject.Code,
+
+                    testScore = newResult.TestScore,
+                    examScore = newResult.ExamScore,
+
+                    score = newResult.Score,
+                    grade = newResult.Grade,
+
+                    remark = newResult.Remark,
+
+                    session = newResult.Session,
+                    term = newResult.Term
+                });
+            }
+        }
+
+        // ============================================================
+        // SAVE
+        // ============================================================
+
+        await _context.SaveChangesAsync();
+
+        // ============================================================
+        // RESPONSE
+        // ============================================================
+
+        return (
+            true,
+            new
+            {
+                schoolId,
+
+                classId = request.ClassId,
+
+                subjectId = subject.Id,
+                subjectName = subject.Name,
+                subjectCode = subject.Code,
+
+                session = currentSession,
+                term = currentTerm,
+
+                uploadedCount = uploadedResults.Count,
+
+                results = uploadedResults
+            },
+            null
+        );
+    }
+
+    // ================================================================
+    // UPLOAD TEST RESULT
+    // TEST = 40
+    // EXAM = 60
+    // ================================================================
+
+    public async Task<(bool Success, object? Data, string? Error)>
+        UploadTestResultAsync(
+            string userId,
+            UploadTestResultRequest request)
+    {
+        // ============================================================
+        // GET TEACHER
+        // ============================================================
+
+        var teacher = await _context.Teachers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.UserId == userId);
+
+        if (teacher == null)
+        {
+            return (
+                false,
+                null,
+                "Teacher profile not found."
+            );
+        }
+
+        var schoolId = teacher.SchoolId;
+
+        // ============================================================
+        // CURRENT ACADEMIC PERIOD
+        // ============================================================
+
+        var period = await _context.AcademicSessions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.SchoolId == schoolId &&
+                x.IsCurrent);
+
+        if (period == null)
+        {
+            return (
+                false,
+                null,
+                "There is no active academic session."
+            );
+        }
+
+        var currentSession = period.Session;
+        var currentTerm = period.Term;
+
+        // ============================================================
+        // VALIDATE TEST SCORE
+        // ============================================================
+
+        if (request.TestScore < 0 ||
+            request.TestScore > 40)
+        {
+            return (
+                false,
+                null,
+                "Test score must be between 0 and 40."
+            );
+        }
+
+        // ============================================================
+        // VALIDATE STUDENT
         // ============================================================
 
         var student = await _context.StudentProfiles
@@ -798,6 +1662,7 @@ public class TeacherPortalService(
 
                 studentName = x.User.FullName,
                 studentNumber = x.StudentNumber,
+
                 className = x.Class.Name
             })
             .FirstOrDefaultAsync();
@@ -825,16 +1690,17 @@ public class TeacherPortalService(
         }
 
         // ============================================================
-        // NEW CLASS MUST BE TAUGHT BY TEACHER
+        // TEACHER MUST TEACH CLASS
         // ============================================================
 
-        var newClassAllowed =
-            await _context.TeacherClasses
-                .AnyAsync(x =>
-                    x.TeacherId == teacher.Id &&
-                    x.ClassId == request.ClassId);
+        var teachesClass = await _context.TeacherClasses
+            .AsNoTracking()
+            .AnyAsync(x =>
+                x.TeacherId == teacher.Id &&
+                x.ClassId == request.ClassId &&
+                x.Class.SchoolId == schoolId);
 
-        if (!newClassAllowed)
+        if (!teachesClass)
         {
             return (
                 false,
@@ -844,26 +1710,7 @@ public class TeacherPortalService(
         }
 
         // ============================================================
-        // NEW SUBJECT MUST BE TAUGHT BY TEACHER
-        // ============================================================
-
-        var newSubjectAllowed =
-            await _context.TeacherSubjects
-                .AnyAsync(x =>
-                    x.TeacherId == teacher.Id &&
-                    x.SubjectId == request.SubjectId);
-
-        if (!newSubjectAllowed)
-        {
-            return (
-                false,
-                null,
-                "You are not assigned to this subject."
-            );
-        }
-
-        // ============================================================
-        // SUBJECT MUST BELONG TO SCHOOL
+        // VALIDATE SUBJECT
         // ============================================================
 
         var subject = await _context.Subjects
@@ -889,60 +1736,132 @@ public class TeacherPortalService(
         }
 
         // ============================================================
-        // SCORE VALIDATION
+        // TEACHER MUST TEACH SUBJECT
         // ============================================================
 
-        if (request.Score < 0 || request.Score > 100)
+        var teachesSubject = await _context.TeacherSubjects
+            .AsNoTracking()
+            .AnyAsync(x =>
+                x.TeacherId == teacher.Id &&
+                x.SubjectId == request.SubjectId &&
+                x.Subject.SchoolId == schoolId);
+
+        if (!teachesSubject)
         {
             return (
                 false,
                 null,
-                "Score must be between 0 and 100."
+                "You are not assigned to this subject."
             );
         }
 
         // ============================================================
-        // DUPLICATE
+        // FIND EXISTING RESULT
         // ============================================================
 
-        var duplicate =
-            await _context.StudentResults
-                .AnyAsync(x =>
-                    x.Id != resultId &&
-                    x.SchoolId == schoolId &&
-                    x.StudentId == request.StudentId &&
-                    x.SubjectId == request.SubjectId &&
-                    x.ClassId == request.ClassId &&
-                    x.Session == currentSession &&
-                    x.Term == currentTerm);
+        var result = await _context.StudentResults
+            .FirstOrDefaultAsync(x =>
+                x.StudentId == request.StudentId &&
+                x.SchoolId == schoolId &&
+                x.ClassId == request.ClassId &&
+                x.SubjectId == request.SubjectId &&
+                x.Session == currentSession &&
+                x.Term == currentTerm);
 
-        if (duplicate)
+        // ============================================================
+        // UPDATE EXISTING RESULT
+        // ============================================================
+
+        if (result != null)
         {
+            // Preserve existing exam score.
+            var examScore = result.ExamScore ?? 0m;
+
+            result.TestScore = request.TestScore;
+
+            // Test + existing exam
+            result.Score =
+                request.TestScore +
+                examScore;
+
+            // Recalculate grade
+            result.Grade =
+                CalculateGrade(result.Score);
+
+            result.Remark = request.Remark;
+
+            await _context.SaveChangesAsync();
+
             return (
-                false,
-                null,
-                "A result already exists for this student, subject and term."
+                true,
+                new
+                {
+                    resultId = result.Id,
+
+                    schoolId,
+
+                    studentId = student.Id,
+                    studentName = student.studentName,
+                    studentNumber = student.studentNumber,
+
+                    classId = result.ClassId,
+                    className = student.className,
+
+                    subjectId = subject.Id,
+                    subjectName = subject.Name,
+                    subjectCode = subject.Code,
+
+                    session = result.Session,
+                    term = result.Term,
+
+                    testScore = result.TestScore,
+                    examScore = result.ExamScore,
+
+                    score = result.Score,
+                    grade = result.Grade,
+
+                    remark = result.Remark,
+
+                    createdAt = result.CreatedAt
+                },
+                null
             );
         }
 
         // ============================================================
-        // UPDATE
+        // CREATE NEW RESULT
         // ============================================================
 
-        result.StudentId = request.StudentId;
-        result.SubjectId = request.SubjectId;
-        result.ClassId = request.ClassId;
+        var newResult = new Models.Results.StudentResult
+        {
+            Id = Guid.NewGuid(),
 
-        // Never allow the request to change these.
-        result.Session = currentSession;
-        result.Term = currentTerm;
+            StudentId = student.Id,
+            SchoolId = schoolId,
 
-        result.Score = request.Score;
-        result.ExamScore = request.ExamScore;
-        result.TestScore = request.TestScore;
-        result.Remark = request.Remark;
+            ClassId = request.ClassId,
+            SubjectId = request.SubjectId,
 
-        result.Grade = CalculateGrade(request.Score);
+            Session = currentSession,
+            Term = currentTerm,
+
+            // Test uploaded
+            TestScore = request.TestScore,
+
+            // Exam not uploaded yet
+            ExamScore = 0m,
+
+            // Test + Exam
+            Score = request.TestScore,
+
+            Grade = CalculateGrade(request.TestScore),
+
+            Remark = request.Remark,
+
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.StudentResults.Add(newResult);
 
         await _context.SaveChangesAsync();
 
@@ -954,45 +1873,48 @@ public class TeacherPortalService(
             true,
             new
             {
-                resultId = result.Id,
+                resultId = newResult.Id,
 
                 schoolId,
 
-                studentId = result.StudentId,
+                studentId = student.Id,
                 studentName = student.studentName,
                 studentNumber = student.studentNumber,
 
-                classId = result.ClassId,
+                classId = newResult.ClassId,
                 className = student.className,
 
-                subjectId = result.SubjectId,
+                subjectId = subject.Id,
                 subjectName = subject.Name,
                 subjectCode = subject.Code,
 
-                session = result.Session,
-                term = result.Term,
+                session = newResult.Session,
+                term = newResult.Term,
 
-                score = result.Score,
-                examScore = result.ExamScore,
-                testScore = result.TestScore,
+                testScore = newResult.TestScore,
+                examScore = newResult.ExamScore,
 
-                grade = result.Grade,
-                remark = result.Remark,
+                score = newResult.Score,
+                grade = newResult.Grade,
 
-                createdAt = result.CreatedAt
+                remark = newResult.Remark,
+
+                createdAt = newResult.CreatedAt
             },
             null
         );
     }
 
     // ================================================================
-    // DELETE RESULT
+    // UPLOAD EXAM RESULT
+    // TEST = 40
+    // EXAM = 60
     // ================================================================
 
-    public async Task<(bool Success, string? Error)>
-        DeleteResultAsync(
+    public async Task<(bool Success, object? Data, string? Error)>
+        UploadExamResultAsync(
             string userId,
-            Guid resultId)
+            UploadExamResultRequest request)
     {
         // ============================================================
         // GET TEACHER
@@ -1007,6 +1929,7 @@ public class TeacherPortalService(
         {
             return (
                 false,
+                null,
                 "Teacher profile not found."
             );
         }
@@ -1014,20 +1937,686 @@ public class TeacherPortalService(
         var schoolId = teacher.SchoolId;
 
         // ============================================================
-        // CURRENT PERIOD
+        // CURRENT ACADEMIC PERIOD
         // ============================================================
 
-        var currentAcademicPeriod =
-            await _context.AcademicSessions
-                .AsNoTracking()
-                .FirstOrDefaultAsync(x =>
-                    x.SchoolId == schoolId &&
-                    x.IsCurrent);
+        var period = await _context.AcademicSessions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.SchoolId == schoolId &&
+                x.IsCurrent);
 
-        if (currentAcademicPeriod == null)
+        if (period == null)
         {
             return (
                 false,
+                null,
+                "There is no active academic session."
+            );
+        }
+
+        var currentSession = period.Session;
+        var currentTerm = period.Term;
+
+        // ============================================================
+        // VALIDATE EXAM SCORE
+        // ============================================================
+
+        if (request.ExamScore < 0 ||
+            request.ExamScore > 60)
+        {
+            return (
+                false,
+                null,
+                "Exam score must be between 0 and 60."
+            );
+        }
+
+        // ============================================================
+        // VALIDATE STUDENT
+        // ============================================================
+
+        var student = await _context.StudentProfiles
+            .AsNoTracking()
+            .Where(x =>
+                x.Id == request.StudentId &&
+                x.SchoolId == schoolId)
+            .Select(x => new
+            {
+                x.Id,
+                x.ClassId,
+
+                studentName = x.User.FullName,
+                studentNumber = x.StudentNumber,
+
+                className = x.Class.Name
+            })
+            .FirstOrDefaultAsync();
+
+        if (student == null)
+        {
+            return (
+                false,
+                null,
+                "Student not found in this school."
+            );
+        }
+
+        // ============================================================
+        // STUDENT MUST BELONG TO CLASS
+        // ============================================================
+
+        if (student.ClassId != request.ClassId)
+        {
+            return (
+                false,
+                null,
+                "The selected class does not belong to this student."
+            );
+        }
+
+        // ============================================================
+        // TEACHER MUST TEACH CLASS
+        // ============================================================
+
+        var teachesClass = await _context.TeacherClasses
+            .AsNoTracking()
+            .AnyAsync(x =>
+                x.TeacherId == teacher.Id &&
+                x.ClassId == request.ClassId &&
+                x.Class.SchoolId == schoolId);
+
+        if (!teachesClass)
+        {
+            return (
+                false,
+                null,
+                "You are not assigned to this class."
+            );
+        }
+
+        // ============================================================
+        // VALIDATE SUBJECT
+        // ============================================================
+
+        var subject = await _context.Subjects
+            .AsNoTracking()
+            .Where(x =>
+                x.Id == request.SubjectId &&
+                x.SchoolId == schoolId)
+            .Select(x => new
+            {
+                x.Id,
+                x.Name,
+                x.Code
+            })
+            .FirstOrDefaultAsync();
+
+        if (subject == null)
+        {
+            return (
+                false,
+                null,
+                "Subject not found in this school."
+            );
+        }
+
+        // ============================================================
+        // TEACHER MUST TEACH SUBJECT
+        // ============================================================
+
+        var teachesSubject = await _context.TeacherSubjects
+            .AsNoTracking()
+            .AnyAsync(x =>
+                x.TeacherId == teacher.Id &&
+                x.SubjectId == request.SubjectId &&
+                x.Subject.SchoolId == schoolId);
+
+        if (!teachesSubject)
+        {
+            return (
+                false,
+                null,
+                "You are not assigned to this subject."
+            );
+        }
+
+        // ============================================================
+        // FIND EXISTING RESULT
+        // ============================================================
+
+        var result = await _context.StudentResults
+            .FirstOrDefaultAsync(x =>
+                x.StudentId == request.StudentId &&
+                x.SchoolId == schoolId &&
+                x.ClassId == request.ClassId &&
+                x.SubjectId == request.SubjectId &&
+                x.Session == currentSession &&
+                x.Term == currentTerm);
+
+        // ============================================================
+        // UPDATE EXISTING RESULT
+        // ============================================================
+
+        if (result != null)
+        {
+            // Preserve existing test score.
+            var testScore = result.TestScore ?? 0m;
+
+            result.ExamScore = request.ExamScore;
+
+            // Existing test + new exam
+            result.Score =
+                testScore +
+                request.ExamScore;
+
+            // Recalculate grade
+            result.Grade =
+                CalculateGrade(result.Score);
+
+            result.Remark = request.Remark;
+
+            await _context.SaveChangesAsync();
+
+            return (
+                true,
+                new
+                {
+                    resultId = result.Id,
+
+                    schoolId,
+
+                    studentId = student.Id,
+                    studentName = student.studentName,
+                    studentNumber = student.studentNumber,
+
+                    classId = result.ClassId,
+                    className = student.className,
+
+                    subjectId = subject.Id,
+                    subjectName = subject.Name,
+                    subjectCode = subject.Code,
+
+                    session = result.Session,
+                    term = result.Term,
+
+                    testScore = result.TestScore,
+                    examScore = result.ExamScore,
+
+                    score = result.Score,
+                    grade = result.Grade,
+
+                    remark = result.Remark,
+
+                    createdAt = result.CreatedAt
+                },
+                null
+            );
+        }
+
+        // ============================================================
+        // CREATE NEW RESULT
+        // ============================================================
+
+        var newResult = new Models.Results.StudentResult
+        {
+            Id = Guid.NewGuid(),
+
+            StudentId = student.Id,
+            SchoolId = schoolId,
+
+            ClassId = request.ClassId,
+            SubjectId = request.SubjectId,
+
+            Session = currentSession,
+            Term = currentTerm,
+
+            // Test not uploaded yet
+            TestScore = 0m,
+
+            // Exam uploaded
+            ExamScore = request.ExamScore,
+
+            // Test + Exam
+            Score = request.ExamScore,
+
+            Grade = CalculateGrade(request.ExamScore),
+
+            Remark = request.Remark,
+
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.StudentResults.Add(newResult);
+
+        await _context.SaveChangesAsync();
+
+        // ============================================================
+        // RESPONSE
+        // ============================================================
+
+        return (
+            true,
+            new
+            {
+                resultId = newResult.Id,
+
+                schoolId,
+
+                studentId = student.Id,
+                studentName = student.studentName,
+                studentNumber = student.studentNumber,
+
+                classId = newResult.ClassId,
+                className = student.className,
+
+                subjectId = subject.Id,
+                subjectName = subject.Name,
+                subjectCode = subject.Code,
+
+                session = newResult.Session,
+                term = newResult.Term,
+
+                testScore = newResult.TestScore,
+                examScore = newResult.ExamScore,
+
+                score = newResult.Score,
+                grade = newResult.Grade,
+
+                remark = newResult.Remark,
+
+                createdAt = newResult.CreatedAt
+            },
+            null
+        );
+    }
+
+    // ================================================================
+    // UPLOAD COMPLETE RESULT
+    // TEST = 40
+    // EXAM = 60
+    // TOTAL = 100
+    // ================================================================
+
+    public async Task<(bool Success, object? Data, string? Error)>
+        UploadResultAsync(
+            string userId,
+            UploadResultRequest request)
+    {
+        // ============================================================
+        // GET TEACHER
+        // ============================================================
+
+        var teacher = await _context.Teachers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.UserId == userId);
+
+        if (teacher == null)
+        {
+            return (
+                false,
+                null,
+                "Teacher profile not found."
+            );
+        }
+
+        var schoolId = teacher.SchoolId;
+
+        // ============================================================
+        // CURRENT ACADEMIC PERIOD
+        // ============================================================
+
+        var period = await _context.AcademicSessions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.SchoolId == schoolId &&
+                x.IsCurrent);
+
+        if (period == null)
+        {
+            return (
+                false,
+                null,
+                "There is no active academic session."
+            );
+        }
+
+        var currentSession = period.Session;
+        var currentTerm = period.Term;
+
+        // ============================================================
+        // VALIDATE TEST SCORE
+        // ============================================================
+
+        if (request.TestScore < 0 ||
+            request.TestScore > 40)
+        {
+            return (
+                false,
+                null,
+                "Test score must be between 0 and 40."
+            );
+        }
+
+        // ============================================================
+        // VALIDATE EXAM SCORE
+        // ============================================================
+
+        if (request.ExamScore < 0 ||
+            request.ExamScore > 60)
+        {
+            return (
+                false,
+                null,
+                "Exam score must be between 0 and 60."
+            );
+        }
+
+        // ============================================================
+        // VALIDATE STUDENT
+        // ============================================================
+
+        var student = await _context.StudentProfiles
+            .AsNoTracking()
+            .Where(x =>
+                x.Id == request.StudentId &&
+                x.SchoolId == schoolId)
+            .Select(x => new
+            {
+                x.Id,
+                x.ClassId,
+
+                studentName = x.User.FullName,
+                studentNumber = x.StudentNumber,
+
+                className = x.Class.Name
+            })
+            .FirstOrDefaultAsync();
+
+        if (student == null)
+        {
+            return (
+                false,
+                null,
+                "Student not found in this school."
+            );
+        }
+
+        // ============================================================
+        // STUDENT MUST BELONG TO CLASS
+        // ============================================================
+
+        if (student.ClassId != request.ClassId)
+        {
+            return (
+                false,
+                null,
+                "The selected class does not belong to this student."
+            );
+        }
+
+        // ============================================================
+        // TEACHER MUST TEACH CLASS
+        // ============================================================
+
+        var teachesClass = await _context.TeacherClasses
+            .AsNoTracking()
+            .AnyAsync(x =>
+                x.TeacherId == teacher.Id &&
+                x.ClassId == request.ClassId &&
+                x.Class.SchoolId == schoolId);
+
+        if (!teachesClass)
+        {
+            return (
+                false,
+                null,
+                "You are not assigned to this class."
+            );
+        }
+
+        // ============================================================
+        // VALIDATE SUBJECT
+        // ============================================================
+
+        var subject = await _context.Subjects
+            .AsNoTracking()
+            .Where(x =>
+                x.Id == request.SubjectId &&
+                x.SchoolId == schoolId)
+            .Select(x => new
+            {
+                x.Id,
+                x.Name,
+                x.Code
+            })
+            .FirstOrDefaultAsync();
+
+        if (subject == null)
+        {
+            return (
+                false,
+                null,
+                "Subject not found in this school."
+            );
+        }
+
+        // ============================================================
+        // TEACHER MUST TEACH SUBJECT
+        // ============================================================
+
+        var teachesSubject = await _context.TeacherSubjects
+            .AsNoTracking()
+            .AnyAsync(x =>
+                x.TeacherId == teacher.Id &&
+                x.SubjectId == request.SubjectId &&
+                x.Subject.SchoolId == schoolId);
+
+        if (!teachesSubject)
+        {
+            return (
+                false,
+                null,
+                "You are not assigned to this subject."
+            );
+        }
+
+        // ============================================================
+        // CHECK EXISTING RESULT
+        // ============================================================
+
+        var result = await _context.StudentResults
+            .FirstOrDefaultAsync(x =>
+                x.StudentId == request.StudentId &&
+                x.SchoolId == schoolId &&
+                x.ClassId == request.ClassId &&
+                x.SubjectId == request.SubjectId &&
+                x.Session == currentSession &&
+                x.Term == currentTerm);
+
+        // ============================================================
+        // CALCULATE TOTAL
+        // ============================================================
+
+        var totalScore =
+            request.TestScore +
+            request.ExamScore;
+
+        // ============================================================
+        // CALCULATE GRADE
+        // ============================================================
+
+        var grade =
+            CalculateGrade(totalScore);
+
+        // ============================================================
+        // UPDATE EXISTING RESULT
+        // ============================================================
+
+        if (result != null)
+        {
+            result.TestScore = request.TestScore;
+            result.ExamScore = request.ExamScore;
+
+            result.Score = totalScore;
+
+            result.Grade = grade;
+
+            result.Remark = request.Remark;
+
+            await _context.SaveChangesAsync();
+
+            return (
+                true,
+                new
+                {
+                    resultId = result.Id,
+
+                    schoolId,
+
+                    studentId = student.Id,
+                    studentName = student.studentName,
+                    studentNumber = student.studentNumber,
+
+                    classId = result.ClassId,
+                    className = student.className,
+
+                    subjectId = subject.Id,
+                    subjectName = subject.Name,
+                    subjectCode = subject.Code,
+
+                    session = result.Session,
+                    term = result.Term,
+
+                    testScore = result.TestScore,
+                    examScore = result.ExamScore,
+
+                    score = result.Score,
+                    grade = result.Grade,
+
+                    remark = result.Remark,
+
+                    createdAt = result.CreatedAt
+                },
+                null
+            );
+        }
+
+        // ============================================================
+        // CREATE NEW RESULT
+        // ============================================================
+
+        var newResult = new Models.Results.StudentResult
+        {
+            Id = Guid.NewGuid(),
+
+            StudentId = student.Id,
+            SchoolId = schoolId,
+
+            ClassId = request.ClassId,
+            SubjectId = subject.Id,
+
+            Session = currentSession,
+            Term = currentTerm,
+
+            TestScore = request.TestScore,
+            ExamScore = request.ExamScore,
+
+            Score = totalScore,
+
+            Grade = grade,
+
+            Remark = request.Remark,
+
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.StudentResults.Add(newResult);
+
+        await _context.SaveChangesAsync();
+
+        // ============================================================
+        // RESPONSE
+        // ============================================================
+
+        return (
+            true,
+            new
+            {
+                resultId = newResult.Id,
+
+                schoolId,
+
+                studentId = student.Id,
+                studentName = student.studentName,
+                studentNumber = student.studentNumber,
+
+                classId = newResult.ClassId,
+                className = student.className,
+
+                subjectId = subject.Id,
+                subjectName = subject.Name,
+                subjectCode = subject.Code,
+
+                session = newResult.Session,
+                term = newResult.Term,
+
+                testScore = newResult.TestScore,
+                examScore = newResult.ExamScore,
+
+                score = newResult.Score,
+                grade = newResult.Grade,
+
+                remark = newResult.Remark,
+
+                createdAt = newResult.CreatedAt
+            },
+            null
+        );
+    }
+
+    public async Task<(bool Success, object? Data, string? Error)>
+        UpdateTestResultAsync(
+            string userId,
+            Guid resultId,
+            UpdateTestResultRequest request)
+    {
+        // ============================================================
+        // GET TEACHER
+        // ============================================================
+
+        var teacher = await _context.Teachers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.UserId == userId);
+
+        if (teacher == null)
+        {
+            return (
+                false,
+                null,
+                "Teacher profile not found."
+            );
+        }
+
+        var schoolId = teacher.SchoolId;
+
+        // ============================================================
+        // CURRENT ACADEMIC PERIOD
+        // ============================================================
+
+        var period = await _context.AcademicSessions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.SchoolId == schoolId &&
+                x.IsCurrent);
+
+        if (period == null)
+        {
+            return (
+                false,
+                null,
                 "There is no active academic session."
             );
         }
@@ -1045,20 +2634,22 @@ public class TeacherPortalService(
         {
             return (
                 false,
+                null,
                 "Result not found."
             );
         }
 
         // ============================================================
-        // ONLY CURRENT TERM
+        // RESULT MUST BE CURRENT
         // ============================================================
 
-        if (result.Session != currentAcademicPeriod.Session ||
-            result.Term != currentAcademicPeriod.Term)
+        if (result.Session != period.Session ||
+            result.Term != period.Term)
         {
             return (
                 false,
-                "Only results for the current term can be deleted."
+                null,
+                "Only results for the current academic period can be edited."
             );
         }
 
@@ -1066,16 +2657,17 @@ public class TeacherPortalService(
         // TEACHER MUST TEACH CLASS
         // ============================================================
 
-        var teachesClass =
-            await _context.TeacherClasses
-                .AnyAsync(x =>
-                    x.TeacherId == teacher.Id &&
-                    x.ClassId == result.ClassId);
+        var teachesClass = await _context.TeacherClasses
+            .AnyAsync(x =>
+                x.TeacherId == teacher.Id &&
+                x.ClassId == result.ClassId &&
+                x.Class.SchoolId == schoolId);
 
         if (!teachesClass)
         {
             return (
                 false,
+                null,
                 "You are not assigned to this class."
             );
         }
@@ -1084,33 +2676,767 @@ public class TeacherPortalService(
         // TEACHER MUST TEACH SUBJECT
         // ============================================================
 
-        var teachesSubject =
-            await _context.TeacherSubjects
-                .AnyAsync(x =>
-                    x.TeacherId == teacher.Id &&
-                    x.SubjectId == result.SubjectId);
+        var teachesSubject = await _context.TeacherSubjects
+            .AnyAsync(x =>
+                x.TeacherId == teacher.Id &&
+                x.SubjectId == result.SubjectId &&
+                x.Subject.SchoolId == schoolId);
 
         if (!teachesSubject)
         {
             return (
                 false,
+                null,
                 "You are not assigned to this subject."
             );
         }
 
         // ============================================================
-        // DELETE
+        // VALIDATE TEST
         // ============================================================
 
-        _context.StudentResults.Remove(result);
+        if (request.TestScore < 0 ||
+            request.TestScore > 40)
+        {
+            return (
+                false,
+                null,
+                "Test score must be between 0 and 40."
+            );
+        }
+
+        // ============================================================
+        // UPDATE TEST ONLY
+        // ============================================================
+
+        result.TestScore = request.TestScore;
+
+        // Preserve existing exam score.
+        var examScore = result.ExamScore ?? 0m;
+
+        // Recalculate total.
+        result.Score =
+            request.TestScore +
+            examScore;
+
+        // Recalculate grade.
+        result.Grade =
+            CalculateGrade(result.Score);
+
+        // Update remark if provided.
+        result.Remark = request.Remark;
 
         await _context.SaveChangesAsync();
 
+        // ============================================================
+        // RESPONSE
+        // ============================================================
+
+        var student = await _context.StudentProfiles
+            .AsNoTracking()
+            .Where(x =>
+                x.Id == result.StudentId &&
+                x.SchoolId == schoolId)
+            .Select(x => new
+            {
+                x.Id,
+                studentName = x.User.FullName,
+                studentNumber = x.StudentNumber,
+                className = x.Class.Name
+            })
+            .FirstOrDefaultAsync();
+
+        var subject = await _context.Subjects
+            .AsNoTracking()
+            .Where(x =>
+                x.Id == result.SubjectId &&
+                x.SchoolId == schoolId)
+            .Select(x => new
+            {
+                x.Id,
+                x.Name,
+                x.Code
+            })
+            .FirstOrDefaultAsync();
+
         return (
             true,
+            new
+            {
+                resultId = result.Id,
+
+                schoolId,
+
+                studentId = result.StudentId,
+                studentName = student?.studentName,
+                studentNumber = student?.studentNumber,
+
+                classId = result.ClassId,
+                className = student?.className,
+
+                subjectId = result.SubjectId,
+                subjectName = subject?.Name,
+                subjectCode = subject?.Code,
+
+                session = result.Session,
+                term = result.Term,
+
+                testScore = result.TestScore,
+                examScore = result.ExamScore,
+
+                score = result.Score,
+                grade = result.Grade,
+
+                remark = result.Remark,
+
+                updatedAt = DateTime.UtcNow
+            },
             null
         );
     }
+
+    public async Task<(bool Success, object? Data, string? Error)>
+        UpdateExamResultAsync(
+            string userId,
+            Guid resultId,
+            UpdateExamResultRequest request)
+    {
+        // ============================================================
+        // GET TEACHER
+        // ============================================================
+
+        var teacher = await _context.Teachers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.UserId == userId);
+
+        if (teacher == null)
+        {
+            return (
+                false,
+                null,
+                "Teacher profile not found."
+            );
+        }
+
+        var schoolId = teacher.SchoolId;
+
+        // ============================================================
+        // CURRENT ACADEMIC PERIOD
+        // ============================================================
+
+        var period = await _context.AcademicSessions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.SchoolId == schoolId &&
+                x.IsCurrent);
+
+        if (period == null)
+        {
+            return (
+                false,
+                null,
+                "There is no active academic session."
+            );
+        }
+
+        // ============================================================
+        // GET RESULT
+        // ============================================================
+
+        var result = await _context.StudentResults
+            .FirstOrDefaultAsync(x =>
+                x.Id == resultId &&
+                x.SchoolId == schoolId);
+
+        if (result == null)
+        {
+            return (
+                false,
+                null,
+                "Result not found."
+            );
+        }
+
+        // ============================================================
+        // CURRENT PERIOD ONLY
+        // ============================================================
+
+        if (result.Session != period.Session ||
+            result.Term != period.Term)
+        {
+            return (
+                false,
+                null,
+                "Only results for the current academic period can be edited."
+            );
+        }
+
+        // ============================================================
+        // TEACHER MUST TEACH CLASS
+        // ============================================================
+
+        var teachesClass = await _context.TeacherClasses
+            .AnyAsync(x =>
+                x.TeacherId == teacher.Id &&
+                x.ClassId == result.ClassId &&
+                x.Class.SchoolId == schoolId);
+
+        if (!teachesClass)
+        {
+            return (
+                false,
+                null,
+                "You are not assigned to this class."
+            );
+        }
+
+        // ============================================================
+        // TEACHER MUST TEACH SUBJECT
+        // ============================================================
+
+        var teachesSubject = await _context.TeacherSubjects
+            .AnyAsync(x =>
+                x.TeacherId == teacher.Id &&
+                x.SubjectId == result.SubjectId &&
+                x.Subject.SchoolId == schoolId);
+
+        if (!teachesSubject)
+        {
+            return (
+                false,
+                null,
+                "You are not assigned to this subject."
+            );
+        }
+
+        // ============================================================
+        // VALIDATE EXAM
+        // ============================================================
+
+        if (request.ExamScore < 0 ||
+            request.ExamScore > 60)
+        {
+            return (
+                false,
+                null,
+                "Exam score must be between 0 and 60."
+            );
+        }
+
+        // ============================================================
+        // UPDATE EXAM ONLY
+        // ============================================================
+
+        result.ExamScore = request.ExamScore;
+
+        // Preserve existing test score.
+        var testScore = result.TestScore ?? 0m;
+
+        // Recalculate total.
+        result.Score =
+            testScore +
+            request.ExamScore;
+
+        // Recalculate grade.
+        result.Grade =
+            CalculateGrade(result.Score);
+
+        result.Remark = request.Remark;
+
+        await _context.SaveChangesAsync();
+
+        // ============================================================
+        // GET RESPONSE DATA
+        // ============================================================
+
+        var student = await _context.StudentProfiles
+            .AsNoTracking()
+            .Where(x =>
+                x.Id == result.StudentId &&
+                x.SchoolId == schoolId)
+            .Select(x => new
+            {
+                x.Id,
+                studentName = x.User.FullName,
+                studentNumber = x.StudentNumber,
+                className = x.Class.Name
+            })
+            .FirstOrDefaultAsync();
+
+        var subject = await _context.Subjects
+            .AsNoTracking()
+            .Where(x =>
+                x.Id == result.SubjectId &&
+                x.SchoolId == schoolId)
+            .Select(x => new
+            {
+                x.Id,
+                x.Name,
+                x.Code
+            })
+            .FirstOrDefaultAsync();
+
+        return (
+            true,
+            new
+            {
+                resultId = result.Id,
+
+                schoolId,
+
+                studentId = result.StudentId,
+                studentName = student?.studentName,
+                studentNumber = student?.studentNumber,
+
+                classId = result.ClassId,
+                className = student?.className,
+
+                subjectId = result.SubjectId,
+                subjectName = subject?.Name,
+                subjectCode = subject?.Code,
+
+                session = result.Session,
+                term = result.Term,
+
+                testScore = result.TestScore,
+                examScore = result.ExamScore,
+
+                score = result.Score,
+                grade = result.Grade,
+
+                remark = result.Remark,
+
+                updatedAt = DateTime.UtcNow
+            },
+            null
+        );
+    }
+
+    public async Task<(bool Success, object? Data, string? Error)>
+        UpdateResultAsync(
+            string userId,
+            Guid resultId,
+            UpdateResultRequest request)
+    {
+        // ============================================================
+        // GET TEACHER
+        // ============================================================
+
+        var teacher = await _context.Teachers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.UserId == userId);
+
+        if (teacher == null)
+        {
+            return (
+                false,
+                null,
+                "Teacher profile not found."
+            );
+        }
+
+        var schoolId = teacher.SchoolId;
+
+        // ============================================================
+        // CURRENT ACADEMIC PERIOD
+        // ============================================================
+
+        var period = await _context.AcademicSessions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.SchoolId == schoolId &&
+                x.IsCurrent);
+
+        if (period == null)
+        {
+            return (
+                false,
+                null,
+                "There is no active academic session."
+            );
+        }
+
+        // ============================================================
+        // GET RESULT
+        // ============================================================
+
+        var result = await _context.StudentResults
+            .FirstOrDefaultAsync(x =>
+                x.Id == resultId &&
+                x.SchoolId == schoolId);
+
+        if (result == null)
+        {
+            return (
+                false,
+                null,
+                "Result not found."
+            );
+        }
+
+        // ============================================================
+        // CURRENT PERIOD ONLY
+        // ============================================================
+
+        if (result.Session != period.Session ||
+            result.Term != period.Term)
+        {
+            return (
+                false,
+                null,
+                "Only results for the current academic period can be edited."
+            );
+        }
+
+        // ============================================================
+        // TEACHER MUST TEACH CLASS
+        // ============================================================
+
+        var teachesClass = await _context.TeacherClasses
+            .AnyAsync(x =>
+                x.TeacherId == teacher.Id &&
+                x.ClassId == result.ClassId &&
+                x.Class.SchoolId == schoolId);
+
+        if (!teachesClass)
+        {
+            return (
+                false,
+                null,
+                "You are not assigned to this class."
+            );
+        }
+
+        // ============================================================
+        // TEACHER MUST TEACH SUBJECT
+        // ============================================================
+
+        var teachesSubject = await _context.TeacherSubjects
+            .AnyAsync(x =>
+                x.TeacherId == teacher.Id &&
+                x.SubjectId == result.SubjectId &&
+                x.Subject.SchoolId == schoolId);
+
+        if (!teachesSubject)
+        {
+            return (
+                false,
+                null,
+                "You are not assigned to this subject."
+            );
+        }
+
+        // ============================================================
+        // VALIDATE TEST
+        // ============================================================
+
+        if (request.TestScore < 0 ||
+            request.TestScore > 40)
+        {
+            return (
+                false,
+                null,
+                "Test score must be between 0 and 40."
+            );
+        }
+
+        // ============================================================
+        // VALIDATE EXAM
+        // ============================================================
+
+        if (request.ExamScore < 0 ||
+            request.ExamScore > 60)
+        {
+            return (
+                false,
+                null,
+                "Exam score must be between 0 and 60."
+            );
+        }
+
+        // ============================================================
+        // UPDATE BOTH
+        // ============================================================
+
+        result.TestScore = request.TestScore;
+        result.ExamScore = request.ExamScore;
+
+        // ============================================================
+        // CALCULATE TOTAL
+        // ============================================================
+
+        result.Score =
+            request.TestScore +
+            request.ExamScore;
+
+        // ============================================================
+        // CALCULATE GRADE
+        // ============================================================
+
+        result.Grade =
+            CalculateGrade(result.Score);
+
+        result.Remark = request.Remark;
+
+        await _context.SaveChangesAsync();
+
+        // ============================================================
+        // RESPONSE DATA
+        // ============================================================
+
+        var student = await _context.StudentProfiles
+            .AsNoTracking()
+            .Where(x =>
+                x.Id == result.StudentId &&
+                x.SchoolId == schoolId)
+            .Select(x => new
+            {
+                x.Id,
+                studentName = x.User.FullName,
+                studentNumber = x.StudentNumber,
+                className = x.Class.Name
+            })
+            .FirstOrDefaultAsync();
+
+        var subject = await _context.Subjects
+            .AsNoTracking()
+            .Where(x =>
+                x.Id == result.SubjectId &&
+                x.SchoolId == schoolId)
+            .Select(x => new
+            {
+                x.Id,
+                x.Name,
+                x.Code
+            })
+            .FirstOrDefaultAsync();
+
+        return (
+            true,
+            new
+            {
+                resultId = result.Id,
+
+                schoolId,
+
+                studentId = result.StudentId,
+                studentName = student?.studentName,
+                studentNumber = student?.studentNumber,
+
+                classId = result.ClassId,
+                className = student?.className,
+
+                subjectId = result.SubjectId,
+                subjectName = subject?.Name,
+                subjectCode = subject?.Code,
+
+                session = result.Session,
+                term = result.Term,
+
+                testScore = result.TestScore,
+                examScore = result.ExamScore,
+
+                score = result.Score,
+                grade = result.Grade,
+
+                remark = result.Remark,
+
+                updatedAt = DateTime.UtcNow
+            },
+            null
+        );
+    }
+
+    // ================================================================
+    // GET TEACHER RESULTS
+    // ================================================================
+
+    public async Task<(bool Success, object? Data, string? Error)>
+        GetResultsAsync(
+            string userId,
+            GetTeacherResultsRequest request)
+    {
+        // ============================================================
+        // GET TEACHER
+        // ============================================================
+
+        var teacher = await _context.Teachers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.UserId == userId);
+
+        if (teacher == null)
+        {
+            return (
+                false,
+                null,
+                "Teacher profile not found."
+            );
+        }
+
+        var schoolId = teacher.SchoolId;
+
+        // ============================================================
+        // CURRENT ACADEMIC PERIOD
+        // ============================================================
+
+        var period = await _context.AcademicSessions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.SchoolId == schoolId &&
+                x.IsCurrent);
+
+        if (period == null)
+        {
+            return (
+                false,
+                null,
+                "There is no active academic session."
+            );
+        }
+
+        // ============================================================
+        // BASE QUERY
+        // ============================================================
+
+        var query = _context.StudentResults
+            .AsNoTracking()
+            .Where(x =>
+                x.SchoolId == schoolId);
+
+        // ============================================================
+        // FILTER BY CLASS
+        // ============================================================
+
+        if (request.ClassId.HasValue)
+        {
+            var teachesClass = await _context.TeacherClasses
+                .AsNoTracking()
+                .AnyAsync(x =>
+                    x.TeacherId == teacher.Id &&
+                    x.ClassId == request.ClassId.Value &&
+                    x.Class.SchoolId == schoolId);
+
+            if (!teachesClass)
+            {
+                return (
+                    false,
+                    null,
+                    "You are not assigned to this class."
+                );
+            }
+
+            query = query.Where(x =>
+                x.ClassId == request.ClassId.Value);
+        }
+
+        // ============================================================
+        // FILTER BY SUBJECT
+        // ============================================================
+
+        if (request.SubjectId.HasValue)
+        {
+            var teachesSubject = await _context.TeacherSubjects
+                .AsNoTracking()
+                .AnyAsync(x =>
+                    x.TeacherId == teacher.Id &&
+                    x.SubjectId == request.SubjectId.Value &&
+                    x.Subject.SchoolId == schoolId);
+
+            if (!teachesSubject)
+            {
+                return (
+                    false,
+                    null,
+                    "You are not assigned to this subject."
+                );
+            }
+
+            query = query.Where(x =>
+                x.SubjectId == request.SubjectId.Value);
+        }
+
+        // ============================================================
+        // SESSION
+        // ============================================================
+
+        if (!string.IsNullOrWhiteSpace(request.Session))
+        {
+            query = query.Where(x =>
+                x.Session == request.Session);
+        }
+
+        // ============================================================
+        // TERM
+        // ============================================================
+
+        if (!string.IsNullOrWhiteSpace(request.Term))
+        {
+            query = query.Where(x =>
+                x.Term == request.Term);
+        }
+
+        // ============================================================
+        // GET RESULTS
+        // ============================================================
+
+        var results = await query
+            .OrderBy(x => x.Student.User.FullName)
+            .Select(x => new
+            {
+                resultId = x.Id,
+
+                schoolId = x.SchoolId,
+
+                studentId = x.StudentId,
+                studentName = x.Student.User.FullName,
+                studentNumber = x.Student.StudentNumber,
+
+                classId = x.ClassId,
+                className = x.Class.Name,
+
+                subjectId = x.SubjectId,
+                subjectName = x.Subject.Name,
+                subjectCode = x.Subject.Code,
+
+                session = x.Session,
+                term = x.Term,
+
+                testScore = x.TestScore,
+                examScore = x.ExamScore,
+
+                score = x.Score,
+                grade = x.Grade,
+
+                remark = x.Remark,
+
+                createdAt = x.CreatedAt
+            })
+            .ToListAsync();
+
+        // ============================================================
+        // RESPONSE
+        // ============================================================
+
+        return (
+            true,
+            new
+            {
+                schoolId,
+
+                currentSession = period.Session,
+                currentTerm = period.Term,
+
+                count = results.Count,
+
+                results
+            },
+            null
+        );
+    }
+
 
     // ================================================================
     // ASSIGNMENTS
