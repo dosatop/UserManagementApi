@@ -136,6 +136,7 @@ public class AdminController(IAdminService adminService, ITeacherService teacher
         return Ok(teachers);
     }
 
+
     [HttpGet("teachers/{teacherId:guid}")]
     public async Task<IActionResult> GetTeacher(
     Guid teacherId)

@@ -174,6 +174,7 @@ public class TeacherService(
                 subjects = x.TeacherSubjects
                     .Select(ts => new
                     {
+                        assignmentId = ts.Id,
                         subjectId = ts.SubjectId,
                         subjectTaught = ts.Subject.Name,
                         code = ts.Subject.Code,
