@@ -1,3 +1,5 @@
+using UserManagementApi.Models.SchoolModels;
+
 namespace UserManagementApi.DTOs.Admin;
 
 public class AdminDashboardDto
@@ -75,11 +77,14 @@ public class AdminClassDto
 {
     public Guid ClassId { get; set; }
     public string? ClassName { get; set; }
+    public SchoolLevel Level { get; set; }
+    public string LevelName { get; set; } = string.Empty;
+
     public Guid SchoolId { get; set; }
 
     public Guid? ClassTeacherId { get; set; }
 
-public string? ClassTeacherName { get; set; }
+    public string? ClassTeacherName { get; set; }
 
     public List<AdminClassStudentDto> Students { get; set; } = [];
     public List<AdminClassTeacherDto> Teachers { get; set; } = [];

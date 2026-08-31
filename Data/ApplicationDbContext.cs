@@ -29,6 +29,12 @@ public class ApplicationDbContext(
 
     public DbSet<Subject> Subjects { get; set; }
 
+    public DbSet<Department> Departments { get; set; }
+
+    public DbSet<Trade> Trades { get; set; }
+
+
+
 
     // ================================================================
     // STUDENTS
@@ -47,6 +53,9 @@ public class ApplicationDbContext(
 
     public DbSet<TeacherSubject> TeacherSubjects { get; set; }
     public DbSet<ClassTeacher> ClassTeachers { get; set; }
+
+    public DbSet<ClassSubject> ClassSubjects { get; set; }
+
 
 
     // ================================================================
@@ -137,6 +146,34 @@ public class ApplicationDbContext(
                 s.StudentNumber
             })
             .IsUnique();
+        builder.Entity<StudentProfile>()
+            .HasOne(s => s.TradeSubject)
+            .WithMany()
+            .HasForeignKey(s => s.TradeSubjectId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+
+        // ============================================================
+        // STUDENT DEPARTMENT
+        // ============================================================
+
+        builder.Entity<StudentProfile>()
+            .HasOne(s => s.Department)
+            .WithMany()
+            .HasForeignKey(s => s.DepartmentId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+
+        // ============================================================
+        // STUDENT TRADE
+        // ============================================================
+
+        builder.Entity<StudentProfile>()
+            .HasOne(s => s.Trade)
+            .WithMany()
+            .HasForeignKey(s => s.TradeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
 
 
         // ============================================================
@@ -310,6 +347,10 @@ public class ApplicationDbContext(
             .HasForeignKey(c => c.SchoolId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        builder.Entity<Class>()
+            .Property(c => c.Level)
+            .IsRequired();
+
 
         // ============================================================
         // SUBJECT
@@ -320,6 +361,64 @@ public class ApplicationDbContext(
             .WithMany(s => s.Subjects)
             .HasForeignKey(s => s.SchoolId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<Subject>()
+            .HasOne(s => s.Department)
+            .WithMany(d => d.Subjects)
+            .HasForeignKey(s => s.DepartmentId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<Subject>()
+            .HasOne(s => s.Trade)
+            .WithMany(t => t.Subjects)
+            .HasForeignKey(s => s.TradeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+
+
+
+        // ============================================================
+        // DEPARTMENT
+        // ============================================================
+
+        builder.Entity<Department>()
+            .HasKey(d => d.Id);
+
+        builder.Entity<Department>()
+            .HasOne(d => d.School)
+            .WithMany(s => s.Departments)
+            .HasForeignKey(d => d.SchoolId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<Department>()
+            .HasIndex(d => new
+            {
+                d.SchoolId,
+                d.Name
+            })
+            .IsUnique();
+
+
+        // ============================================================
+        // TRADE
+        // ============================================================
+
+        builder.Entity<Trade>()
+            .HasKey(t => t.Id);
+
+        builder.Entity<Trade>()
+            .HasOne(t => t.School)
+            .WithMany(s => s.Trades)
+            .HasForeignKey(t => t.SchoolId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<Trade>()
+            .HasIndex(t => new
+            {
+                t.SchoolId,
+                t.Name
+            })
+            .IsUnique();
 
 
         // ============================================================
@@ -344,6 +443,40 @@ public class ApplicationDbContext(
             .WithMany(s => s.Parents)
             .HasForeignKey(ps => ps.StudentId)
             .OnDelete(DeleteBehavior.Cascade);
+
+
+        // ================================================================
+        // CLASS SUBJECT
+        // ================================================================
+
+        builder.Entity<ClassSubject>()
+            .HasKey(cs => cs.Id);
+
+        builder.Entity<ClassSubject>()
+            .HasOne(cs => cs.Class)
+            .WithMany(c => c.ClassSubjects)
+            .HasForeignKey(cs => cs.ClassId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<ClassSubject>()
+            .HasOne(cs => cs.Subject)
+            .WithMany(s => s.ClassSubjects)
+            .HasForeignKey(cs => cs.SubjectId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Prevent the same subject from being added twice to a class
+        builder.Entity<ClassSubject>()
+            .HasIndex(cs => new
+            {
+                cs.ClassId,
+                cs.SubjectId
+            })
+            .IsUnique();
+        builder.Entity<ClassSubject>()
+            .HasOne<School>()
+            .WithMany()
+            .HasForeignKey(cs => cs.SchoolId)
+            .OnDelete(DeleteBehavior.Restrict);
 
 
         // ============================================================

@@ -500,9 +500,9 @@ public class TeacherService(
         }
 
         var classroom = await _context.Classes
-            .FirstOrDefaultAsync(x =>
-                x.Id == request.ClassId.Value &&
-                x.SchoolId == schoolId);
+       .FirstOrDefaultAsync(x =>
+           x.Id == request.ClassId.Value &&
+           x.SchoolId == schoolId);
 
         if (classroom == null)
         {
@@ -512,6 +512,26 @@ public class TeacherService(
                 "Class not found in this school."
             );
         }
+
+
+        // ------------------------------------------------------------
+        // CHECK SUBJECT IS ASSIGNED TO CLASS
+        // ------------------------------------------------------------
+
+        var classSubjectExists = await _context.ClassSubjects
+            .AnyAsync(x =>
+                x.ClassId == request.ClassId.Value &&
+                x.SubjectId == request.SubjectId);
+
+        if (!classSubjectExists)
+        {
+            return (
+                false,
+                null,
+                "This subject has not been assigned to this class."
+            );
+        }
+
 
         // ------------------------------------------------------------
         // CHECK DUPLICATE ASSIGNMENT
@@ -531,6 +551,7 @@ public class TeacherService(
                 "Teacher is already assigned to this subject for this class."
             );
         }
+
 
         // ------------------------------------------------------------
         // CREATE ASSIGNMENT

@@ -1,3 +1,4 @@
+using UserManagementApi.Models.Assignments;
 using UserManagementApi.Models.SchoolModels;
 
 namespace UserManagementApi.Models
@@ -16,13 +17,23 @@ namespace UserManagementApi.Models
 
         public int? AcademicYear { get; set; }
 
+        // ============================================================
+        // SCHOOL LEVEL
+        // ============================================================
+
+        public SchoolLevel Level { get; set; }
+
         // Students in this class
         public ICollection<StudentProfile> Students { get; set; } = [];
 
         // Teachers assigned to this class
         public ICollection<TeacherClass> TeacherClasses { get; set; } = [];
 
-         public ICollection<TeacherSubject> TeacherSubjects { get; set; }
-        = [];
+        public ICollection<TeacherSubject> TeacherSubjects { get; set; }
+       = [];
+
+
+        public ICollection<ClassSubject> ClassSubjects { get; set; } = [];
+
     }
 }

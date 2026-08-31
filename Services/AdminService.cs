@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using UserManagementApi.Data;
 using UserManagementApi.DTOs.Admin;
 using UserManagementApi.DTOs.Auth.Roles;
+using UserManagementApi.Models.SchoolModels;
 using UserManagementApi.Services;
 
 namespace UserManagementApi.Services;
@@ -166,8 +167,8 @@ public class AdminService(ApplicationDbContext context) : IAdminService
     }
 
     public async Task<AdminStudentDto?> GetStudentAsync(
-    Guid schoolId,
-    Guid studentId)
+      Guid schoolId,
+      Guid studentId)
     {
         var student = await _context.StudentProfiles
             .AsNoTracking()
@@ -188,6 +189,43 @@ public class AdminService(ApplicationDbContext context) : IAdminService
 
                 ClassId = x.ClassId,
                 ClassName = x.Class.Name,
+
+                // ========================================================
+                // SCHOOL LEVEL
+                // ========================================================
+
+                SchoolLevel = x.SchoolLevel,
+
+                // ========================================================
+                // DEPARTMENT
+                // ========================================================
+
+                DepartmentId = x.DepartmentId,
+                DepartmentName = x.Department != null
+                    ? x.Department.Name
+                    : null,
+
+                // ========================================================
+                // TRADE
+                // ========================================================
+
+                TradeId = x.TradeId,
+                TradeName = x.Trade != null
+                    ? x.Trade.Name
+                    : null,
+
+                TradeSubjectId = x.TradeSubjectId,
+                TradeSubjectName = x.TradeSubject != null
+                    ? x.TradeSubject.Name
+                    : null,
+
+                TradeSubjectCode = x.TradeSubject != null
+                    ? x.TradeSubject.Code
+                    : null,
+
+                // ========================================================
+                // PARENTS
+                // ========================================================
 
                 Parents = x.Parents
                     .Select(ps => new AdminParentDto
@@ -212,7 +250,18 @@ public class AdminService(ApplicationDbContext context) : IAdminService
 
         student.Subjects = await _context.Subjects
             .AsNoTracking()
-            .Where(x => x.SchoolId == schoolId)
+            .Where(x =>
+                x.SchoolId == schoolId &&
+                (
+                    // Normal class subjects
+                    x.ClassSubjects.Any(cs =>
+                        cs.ClassId == student.ClassId)
+
+                    ||
+
+                    // The student's selected trade subject
+                    x.Id == student.TradeSubjectId
+                ))
             .OrderBy(x => x.Name)
             .Select(x => new AdminStudentSubjectDto
             {
@@ -351,72 +400,84 @@ public class AdminService(ApplicationDbContext context) : IAdminService
         return student;
     }
 
+
     // ================================================================
     // CLASSES
     // ================================================================
 
- public async Task<List<AdminClassDto>> GetClassesAsync(Guid schoolId)
-{
-    return await _context.Classes
-        .AsNoTracking()
-        .Where(x => x.SchoolId == schoolId)
-        .Select(x => new AdminClassDto
-        {
-            ClassId = x.Id,
-            ClassName = x.Name,
-            SchoolId = x.SchoolId,
+    public async Task<List<AdminClassDto>> GetClassesAsync(Guid schoolId)
+    {
+        return await _context.Classes
+            .AsNoTracking()
+            .Where(x => x.SchoolId == schoolId)
+            .Select(x => new AdminClassDto
+            {
+                ClassId = x.Id,
+                ClassName = x.Name,
+                SchoolId = x.SchoolId,
 
-            // ========================================================
-            // CLASS TEACHER
-            // ========================================================
+                // ========================================================
+                // SCHOOL LEVEL
+                // ========================================================
 
-            ClassTeacherId = x.TeacherClasses
-                .Select(tc => (Guid?)tc.TeacherId)
-                .FirstOrDefault(),
+                Level = x.Level,
 
-            ClassTeacherName = x.TeacherClasses
-                .Select(tc => tc.Teacher.User.FullName)
-                .FirstOrDefault(),
+                LevelName = x.Level == SchoolLevel.Junior
+                    ? "Junior"
+                    : "Senior",
 
-            // ========================================================
-            // STUDENTS
-            // ========================================================
+                // ========================================================
+                // CLASS TEACHER
+                // ========================================================
 
-            Students = x.Students
-                .Select(s => new AdminClassStudentDto
-                {
-                    StudentId = s.Id,
-                    StudentNumber = s.StudentNumber,
-                    StudentName = s.User.FullName,
-                    Email = s.User.Email,
-                    PhoneNumber = s.User.PhoneNumber
-                })
-                .ToList(),
+                ClassTeacherId = x.TeacherClasses
+                    .Select(tc => (Guid?)tc.TeacherId)
+                    .FirstOrDefault(),
 
-            // ========================================================
-            // TEACHERS + SUBJECTS
-            // ========================================================
+                ClassTeacherName = x.TeacherClasses
+                    .Select(tc => tc.Teacher.User.FullName)
+                    .FirstOrDefault(),
 
-            Teachers = x.TeacherSubjects
-                .Select(ts => new AdminClassTeacherDto
-                {
-                    TeacherId = ts.TeacherId,
+                // ========================================================
+                // STUDENTS
+                // ========================================================
 
-                    TeacherName = ts.Teacher.User.FullName,
-                    Email = ts.Teacher.User.Email,
-                    PhoneNumber = ts.Teacher.User.PhoneNumber,
+                Students = x.Students
+                    .Select(s => new AdminClassStudentDto
+                    {
+                        StudentId = s.Id,
+                        StudentNumber = s.StudentNumber,
+                        StudentName = s.User.FullName,
+                        Email = s.User.Email,
+                        PhoneNumber = s.User.PhoneNumber
+                    })
+                    .ToList(),
 
-                    SubjectId = ts.SubjectId,
-                    SubjectName = ts.Subject.Name,
-                    SubjectCode = ts.Subject.Code,
+                // ========================================================
+                // TEACHERS + SUBJECTS
+                // ========================================================
 
-                    ClassId = ts.ClassId,
-                    ClassName = ts.Class.Name
-                })
-                .ToList()
-        })
-        .ToListAsync();
-}
+                Teachers = x.TeacherSubjects
+                    .Select(ts => new AdminClassTeacherDto
+                    {
+                        TeacherId = ts.TeacherId,
+
+                        TeacherName = ts.Teacher.User.FullName,
+                        Email = ts.Teacher.User.Email,
+                        PhoneNumber = ts.Teacher.User.PhoneNumber,
+
+                        SubjectId = ts.SubjectId,
+                        SubjectName = ts.Subject.Name,
+                        SubjectCode = ts.Subject.Code,
+
+                        ClassId = ts.ClassId,
+                        ClassName = ts.Class.Name
+                    })
+                    .ToList()
+            })
+            .ToListAsync();
+    }
+
 
     // ================================================================
     // SUBJECTS

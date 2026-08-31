@@ -1,4 +1,5 @@
 namespace UserManagementApi.Models.SchoolModels;
+
 public class School
 {
     public Guid Id { get; set; }
@@ -21,4 +22,8 @@ public class School
 
     // School subjects
     public ICollection<Subject> Subjects { get; set; } = [];
+
+    public ICollection<Department> Departments { get; set; } = [];
+
+    public ICollection<Trade> Trades { get; set; } = [];
 }

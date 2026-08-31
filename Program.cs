@@ -124,6 +124,10 @@ builder.Services.AddScoped<
 IAcademicSessionService,
 AcademicSessionService>();
 builder.Services.AddScoped<IResultImportService, ResultImportService>();
+builder.Services.AddScoped<IDepartmentService, DepartmentService>();
+builder.Services.AddScoped<ITradeService, TradeService>();
+builder.Services.AddScoped<IClassSubjectService, ClassSubjectService>();
+
 
 builder.Services.AddScoped<IResultService, ResultService>();
 

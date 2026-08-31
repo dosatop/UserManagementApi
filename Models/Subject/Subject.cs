@@ -4,6 +4,13 @@ using UserManagementApi.Models.SchoolModels;
 
 namespace UserManagementApi.Models;
 
+public enum SubjectType
+{
+    General = 1,
+    Department = 2,
+    Trade = 3
+}
+
 public class Subject
 {
     public Guid Id { get; set; }
@@ -15,6 +22,30 @@ public class Subject
     public string Name { get; set; } = string.Empty;
 
     public string? Code { get; set; }
+
+    // ============================================================
+    // SUBJECT TYPE
+    // ============================================================
+
+    public SubjectType Type { get; set; }
+
+    // ============================================================
+    // DEPARTMENT
+    // ============================================================
+
+    public Guid? DepartmentId { get; set; }
+
+    public Department? Department { get; set; }
+
+    // ============================================================
+    // TRADE
+    // ============================================================
+
+    public Guid? TradeId { get; set; }
+
+    public Trade? Trade { get; set; }
+
+     public ICollection<ClassSubject> ClassSubjects { get; set; } = [];
 
     // ============================================================
     // TEACHERS

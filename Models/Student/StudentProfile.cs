@@ -23,6 +23,33 @@ public class StudentProfile
     public string UserId { get; set; } = string.Empty;
 
     public User User { get; set; } = null!;
+    // ============================================================
+    // SCHOOL LEVEL
+    // ============================================================
+
+    public SchoolLevel SchoolLevel { get; set; }
+
+    // ============================================================
+    // DEPARTMENT
+    // ============================================================
+
+    public Guid? DepartmentId { get; set; }
+
+    public Department? Department { get; set; }
+
+
+    // ============================================================
+    // TRADE
+    // ============================================================
+
+    public Guid? TradeId { get; set; }
+
+    public Trade? Trade { get; set; }
+
+    public Guid? TradeSubjectId { get; set; }
+
+    public Subject? TradeSubject { get; set; }
+
 
     // ============================================================
     // SCHOOL

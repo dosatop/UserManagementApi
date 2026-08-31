@@ -8,5 +8,7 @@ public class CreateStudentRequest
 
     public string StudentNumber { get; set; } = string.Empty;
 
+    public Guid? DepartmentId { get; set; }
+    public Guid? TradeId { get; set; }
     public Guid ClassRoomId { get; set; }
 }

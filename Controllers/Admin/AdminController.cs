@@ -3,11 +3,14 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using UserManagementApi.DTOs.Auth.Roles;
 using UserManagementApi.DTOs.Classes;
+using UserManagementApi.DTOs.ClassSubjects;
+using UserManagementApi.DTOs.Departments;
 using UserManagementApi.DTOs.Parents;
 using UserManagementApi.DTOs.Results;
 using UserManagementApi.DTOs.Students;
 using UserManagementApi.DTOs.Subjects;
 using UserManagementApi.DTOs.Teachers;
+using UserManagementApi.DTOs.Trades;
 using UserManagementApi.Services;
 using UserManagementApi.Services.Interfaces;
 
@@ -34,7 +37,7 @@ public abstract class SchoolAdminControllerBase : ControllerBase
 [ApiController]
 [Route("api/admin")]
 [Authorize(Roles = Roles.Admin)]
-public class AdminController(IAdminService adminService, ITeacherService teacherService, IStudentService studentService, IClassService classService, ISubjectService subjectService, IParentService parentService, IResultService resultService) : SchoolAdminControllerBase
+public class AdminController(IAdminService adminService, ITeacherService teacherService, IStudentService studentService, IClassService classService, ISubjectService subjectService, IParentService parentService, IResultService resultService, IDepartmentService departmentService, ITradeService tradeService, IClassSubjectService classSubjectService) : SchoolAdminControllerBase
 {
     private readonly IAdminService _adminService = adminService;
     private readonly ITeacherService _teacherService = teacherService;
@@ -44,6 +47,9 @@ public class AdminController(IAdminService adminService, ITeacherService teacher
     private readonly IParentService _parentService = parentService;
 
     private readonly IResultService _resultService = resultService;
+    private readonly IDepartmentService _departmentService = departmentService;
+    private readonly ITradeService _tradeService = tradeService;
+    private readonly IClassSubjectService _classSubjectService = classSubjectService;
 
     private string? GetUserId()
     {
@@ -402,6 +408,39 @@ public class AdminController(IAdminService adminService, ITeacherService teacher
             message = "Student deleted successfully."
         });
     }
+
+    [HttpPut("{studentId:guid}/academic-path")]
+    public async Task<IActionResult> UpdateStudentAcademicPath(
+    Guid studentId,
+    [FromBody] UpdateStudentAcademicPathRequest request)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result =
+            await _studentService.UpdateStudentAcademicPathAsync(
+                schoolId.Value,
+                studentId,
+                request);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
 
     [HttpGet("students/{studentId:guid}/assignments")]
     public async Task<IActionResult> GetStudentAssignments(
@@ -1611,7 +1650,480 @@ public class AdminController(IAdminService adminService, ITeacherService teacher
 
         return Ok(result.Data);
     }
+    [HttpPost("department")]
+    public async Task<IActionResult> CreateDepartmentAsync(
+        [FromBody] CreateDepartmentRequest req)
+    {
+        var schoolId = GetSchoolId();
 
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _departmentService.CreateDepartmentAsync(
+            schoolId.Value,
+            req
+        );
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(new
+        {
+            message = "Department created successfully.",
+            data = result.Data
+        });
+    }
+
+
+    [HttpGet("departments")]
+    public async Task<IActionResult> GetDepartmentsAsync()
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var departments = await _departmentService
+            .GetDepartmentsAsync(schoolId.Value);
+
+        return Ok(new
+        {
+            data = departments
+        });
+    }
+
+    [HttpGet("department/{departmentId}")]
+    public async Task<IActionResult> GetDepartmentAsync(
+        Guid departmentId)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _departmentService.GetDepartmentAsync(
+            schoolId.Value,
+            departmentId
+        );
+
+        if (!result.Success)
+        {
+            return NotFound(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(new
+        {
+            data = result.Data
+        });
+    }
+
+    [HttpPut("department/{departmentId}")]
+    public async Task<IActionResult> UpdateDepartmentAsync(
+    Guid departmentId,
+    [FromBody] CreateDepartmentRequest req)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _departmentService.UpdateDepartmentAsync(
+            schoolId.Value,
+            departmentId,
+            req
+        );
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(new
+        {
+            message = "Department updated successfully.",
+            data = result.Data
+        });
+    }
+
+    [HttpDelete("department/{departmentId}")]
+    public async Task<IActionResult> DeleteDepartmentAsync(
+    Guid departmentId)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _departmentService.DeleteDepartmentAsync(
+            schoolId.Value,
+            departmentId
+        );
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(new
+        {
+            message = "Department deleted successfully."
+        });
+    }
+
+    [HttpPost("trade")]
+    public async Task<IActionResult> CreateTradeAsync(
+        [FromBody] CreateTradeRequest req)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _tradeService.CreateTradeAsync(
+            schoolId.Value,
+            req);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(new
+        {
+            message = "Trade Created Successfully.",
+            data = result.Data
+        });
+    }
+
+    [HttpGet("trades")]
+    public async Task<IActionResult> GetTradesAsync()
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var trades = await _tradeService.GetTradesAsync(
+            schoolId.Value
+        );
+
+        return Ok(trades);
+    }
+
+    [HttpGet("trade/{tradeId:guid}")]
+    public async Task<IActionResult> GetTradeAsync(
+        Guid tradeId)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _tradeService.GetTradeAsync(
+            schoolId.Value,
+            tradeId
+        );
+
+        if (!result.Success)
+        {
+            return NotFound(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
+    [HttpPut("trade/{tradeId:guid}")]
+    public async Task<IActionResult> UpdateTradeAsync(
+        Guid tradeId,
+        [FromBody] CreateTradeRequest req)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _tradeService.UpdateTradeAsync(
+            schoolId.Value,
+            tradeId,
+            req
+        );
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(new
+        {
+            message = "Trade updated successfully.",
+            data = result.Data
+        });
+    }
+
+    [HttpDelete("trade/{tradeId:guid}")]
+    public async Task<IActionResult> DeleteTradeAsync(
+        Guid tradeId)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _tradeService.DeleteTradeAsync(
+            schoolId.Value,
+            tradeId
+        );
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(new
+        {
+            message = "Trade deleted successfully."
+        });
+    }
+
+    // ============================================================
+    // ASSIGN SUBJECT TO CLASS
+    // ============================================================
+
+    [HttpPost("classes/subjects")]
+    public async Task<IActionResult> AssignSubjectToClass(
+        [FromBody] AssignClassSubjectRequest request)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result =
+            await _classSubjectService.AssignSubjectToClassAsync(
+                schoolId.Value,
+                request.ClassId,
+                request.SubjectId);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
+
+    // ============================================================
+    // GET SUBJECTS FOR CLASS
+    // ============================================================
+
+    [HttpGet("class/{classId:guid}")]
+    public async Task<IActionResult> GetClassSubjects(
+        Guid classId)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var subjects =
+            await _classSubjectService.GetClassSubjectsAsync(
+                schoolId.Value,
+                classId);
+
+        return Ok(subjects);
+    }
+
+
+    // ============================================================
+    // REMOVE SUBJECT FROM CLASS
+    // ============================================================
+
+    [HttpDelete("class/{classId:guid}/subject/{subjectId:guid}")]
+    public async Task<IActionResult> RemoveSubjectFromClass(
+        Guid classId,
+        Guid subjectId)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result =
+            await _classSubjectService.RemoveSubjectFromClassAsync(
+                schoolId.Value,
+                classId,
+                subjectId);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(new
+        {
+            message = "Subject removed from class successfully."
+        });
+    }
+
+    [HttpPut("students/{studentId}/trade")]
+    public async Task<IActionResult> AssignTrade(
+     Guid studentId,
+     [FromBody] AssignStudentTradeRequest request)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _studentService.AssignTradeAsync(
+            schoolId.Value,
+            studentId,
+            request.TradeId,
+            request.TradeSubjectId);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
+
+    [HttpDelete("students/{studentId}/trade")]
+    public async Task<IActionResult> UnassignTrade(
+        Guid studentId)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _studentService.UnassignTradeAsync(
+            schoolId.Value,
+            studentId);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
 
 
 }

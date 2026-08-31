@@ -9,11 +9,11 @@ public interface IStudentService
             Guid schoolId,
             CreateStudentRequest request);
 
-   Task<(bool Success, object? Data, string? Error)>
-    GetStudentsByClassOrSubjectAsync(
-        Guid schoolId,
-        Guid? classId,
-        Guid? subjectId);
+    Task<(bool Success, object? Data, string? Error)>
+     GetStudentsByClassOrSubjectAsync(
+         Guid schoolId,
+         Guid? classId,
+         Guid? subjectId);
 
     Task<(bool Success, object? Data, string? Error)>
         GetStudentByIdAsync(
@@ -31,7 +31,7 @@ public interface IStudentService
             Guid schoolId,
             Guid studentId);
 
-              // ADMIN ATTENDANCE
+    // ADMIN ATTENDANCE
     Task<(bool Success, object? Data, string? Error)>
         GetStudentAttendanceAsync(
             Guid schoolId,
@@ -46,4 +46,23 @@ public interface IStudentService
             Guid studentId,
             string session,
             string term);
+
+    Task<(bool Success, object? Data, string? Error)>
+        UpdateStudentAcademicPathAsync(
+        Guid schoolId,
+        Guid studentId,
+        UpdateStudentAcademicPathRequest request);
+
+    Task<(bool Success, object? Data, string? Error)>
+AssignTradeAsync(
+    Guid schoolId,
+    Guid studentId,
+    Guid tradeId, Guid tradeSubjectId);
+
+    Task<(bool Success, object? Data, string? Error)>
+        UnassignTradeAsync(
+            Guid schoolId,
+            Guid studentId);
+
+
 }

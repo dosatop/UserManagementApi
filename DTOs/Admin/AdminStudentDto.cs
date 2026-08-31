@@ -1,3 +1,5 @@
+using UserManagementApi.Models.SchoolModels;
+
 public class AdminStudentDto
 {
     public Guid StudentId { get; set; }
@@ -12,6 +14,31 @@ public class AdminStudentDto
 
     public Guid ClassId { get; set; }
     public string? ClassName { get; set; }
+
+    // ============================================================
+    // SCHOOL LEVEL
+    // ============================================================
+
+    public SchoolLevel SchoolLevel { get; set; }
+    public int SchoolLevelId => (int)SchoolLevel;
+
+    // ============================================================
+    // DEPARTMENT
+    // ============================================================
+
+    public Guid? DepartmentId { get; set; }
+    public string? DepartmentName { get; set; }
+
+    // ============================================================
+    // TRADE
+    // ============================================================
+
+    public Guid? TradeId { get; set; }
+    public string? TradeName { get; set; }
+
+    public Guid? TradeSubjectId { get; set; }
+    public string? TradeSubjectName { get; set; }
+    public string? TradeSubjectCode { get; set; }
 
     public List<AdminParentDto> Parents { get; set; } = [];
 

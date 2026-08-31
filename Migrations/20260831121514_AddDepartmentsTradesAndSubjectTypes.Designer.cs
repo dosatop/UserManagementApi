@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using UserManagementApi.Data;
@@ -11,9 +12,11 @@ using UserManagementApi.Data;
 namespace UserManagementApi.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260831121514_AddDepartmentsTradesAndSubjectTypes")]
+    partial class AddDepartmentsTradesAndSubjectTypes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -374,33 +377,6 @@ namespace UserManagementApi.Migrations
                     b.ToTable("AssignmentSubmissions");
                 });
 
-            modelBuilder.Entity("UserManagementApi.Models.Assignments.ClassSubject", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ClassId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("SchoolId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("SubjectId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SchoolId");
-
-                    b.HasIndex("SubjectId");
-
-                    b.HasIndex("ClassId", "SubjectId")
-                        .IsUnique();
-
-                    b.ToTable("ClassSubjects");
-                });
-
             modelBuilder.Entity("UserManagementApi.Models.AttendanceRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -507,9 +483,6 @@ namespace UserManagementApi.Migrations
                     b.Property<int?>("AcademicYear")
                         .HasColumnType("integer");
 
-                    b.Property<int>("Level")
-                        .HasColumnType("integer");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
@@ -545,10 +518,9 @@ namespace UserManagementApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("SchoolId", "Name")
-                        .IsUnique();
+                    b.HasIndex("SchoolId");
 
-                    b.ToTable("Departments");
+                    b.ToTable("Department");
                 });
 
             modelBuilder.Entity("UserManagementApi.Models.Parent", b =>
@@ -673,24 +645,12 @@ namespace UserManagementApi.Migrations
                     b.Property<Guid>("ClassId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("DepartmentId")
-                        .HasColumnType("uuid");
-
                     b.Property<Guid>("SchoolId")
                         .HasColumnType("uuid");
-
-                    b.Property<int>("SchoolLevel")
-                        .HasColumnType("integer");
 
                     b.Property<string>("StudentNumber")
                         .IsRequired()
                         .HasColumnType("text");
-
-                    b.Property<Guid?>("TradeId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("TradeSubjectId")
-                        .HasColumnType("uuid");
 
                     b.Property<string>("UserId")
                         .IsRequired()
@@ -699,12 +659,6 @@ namespace UserManagementApi.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ClassId");
-
-                    b.HasIndex("DepartmentId");
-
-                    b.HasIndex("TradeId");
-
-                    b.HasIndex("TradeSubjectId");
 
                     b.HasIndex("UserId")
                         .IsUnique();
@@ -822,10 +776,9 @@ namespace UserManagementApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("SchoolId", "Name")
-                        .IsUnique();
+                    b.HasIndex("SchoolId");
 
-                    b.ToTable("Trades");
+                    b.ToTable("Trade");
                 });
 
             modelBuilder.Entity("UserManagementApi.Models.User", b =>
@@ -1099,31 +1052,6 @@ namespace UserManagementApi.Migrations
                     b.Navigation("Student");
                 });
 
-            modelBuilder.Entity("UserManagementApi.Models.Assignments.ClassSubject", b =>
-                {
-                    b.HasOne("UserManagementApi.Models.Class", "Class")
-                        .WithMany("ClassSubjects")
-                        .HasForeignKey("ClassId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("UserManagementApi.Models.SchoolModels.School", null)
-                        .WithMany()
-                        .HasForeignKey("SchoolId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("UserManagementApi.Models.Subject", "Subject")
-                        .WithMany("ClassSubjects")
-                        .HasForeignKey("SubjectId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Class");
-
-                    b.Navigation("Subject");
-                });
-
             modelBuilder.Entity("UserManagementApi.Models.AttendanceRecord", b =>
                 {
                     b.HasOne("UserManagementApi.Models.Class", "Class")
@@ -1265,26 +1193,11 @@ namespace UserManagementApi.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("UserManagementApi.Models.Department", "Department")
-                        .WithMany()
-                        .HasForeignKey("DepartmentId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("UserManagementApi.Models.SchoolModels.School", "School")
                         .WithMany()
                         .HasForeignKey("SchoolId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("UserManagementApi.Models.Trade", "Trade")
-                        .WithMany()
-                        .HasForeignKey("TradeId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("UserManagementApi.Models.Subject", "TradeSubject")
-                        .WithMany()
-                        .HasForeignKey("TradeSubjectId")
-                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("UserManagementApi.Models.User", "User")
                         .WithOne("Student")
@@ -1294,13 +1207,7 @@ namespace UserManagementApi.Migrations
 
                     b.Navigation("Class");
 
-                    b.Navigation("Department");
-
                     b.Navigation("School");
-
-                    b.Navigation("Trade");
-
-                    b.Navigation("TradeSubject");
 
                     b.Navigation("User");
                 });
@@ -1309,8 +1216,7 @@ namespace UserManagementApi.Migrations
                 {
                     b.HasOne("UserManagementApi.Models.Department", "Department")
                         .WithMany("Subjects")
-                        .HasForeignKey("DepartmentId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .HasForeignKey("DepartmentId");
 
                     b.HasOne("UserManagementApi.Models.SchoolModels.School", "School")
                         .WithMany("Subjects")
@@ -1320,8 +1226,7 @@ namespace UserManagementApi.Migrations
 
                     b.HasOne("UserManagementApi.Models.Trade", "Trade")
                         .WithMany("Subjects")
-                        .HasForeignKey("TradeId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .HasForeignKey("TradeId");
 
                     b.Navigation("Department");
 
@@ -1396,8 +1301,6 @@ namespace UserManagementApi.Migrations
 
             modelBuilder.Entity("UserManagementApi.Models.Class", b =>
                 {
-                    b.Navigation("ClassSubjects");
-
                     b.Navigation("Students");
 
                     b.Navigation("TeacherClasses");
@@ -1442,8 +1345,6 @@ namespace UserManagementApi.Migrations
                     b.Navigation("Assignments");
 
                     b.Navigation("AttendanceRecords");
-
-                    b.Navigation("ClassSubjects");
 
                     b.Navigation("TeacherSubjects");
                 });

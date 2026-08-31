@@ -35,6 +35,74 @@ public class SubjectService : ISubjectService
         var name = request.Name.Trim();
         var code = request.Code?.Trim();
 
+        if (request.Type == SubjectType.Department &&
+    request.DepartmentId == null)
+        {
+            return (
+                false,
+                null,
+                "Department is required for a department subject."
+            );
+        }
+
+        if (request.Type == SubjectType.Trade &&
+            request.TradeId == null)
+        {
+            return (
+                false,
+                null,
+                "Trade is required for a trade subject."
+            );
+        }
+
+        if (request.Type == SubjectType.General &&
+            (request.DepartmentId != null || request.TradeId != null))
+        {
+            return (
+                false,
+                null,
+                "General subjects cannot belong to a department or trade."
+            );
+        }
+        Department? department = null;
+
+        if (request.DepartmentId.HasValue)
+        {
+            department = await _context.Departments
+                .FirstOrDefaultAsync(x =>
+                    x.Id == request.DepartmentId.Value &&
+                    x.SchoolId == schoolId);
+
+            if (department == null)
+            {
+                return (
+                    false,
+                    null,
+                    "Department not found in this school."
+                );
+            }
+        }
+        Trade? trade = null;
+
+        if (request.TradeId.HasValue)
+        {
+            trade = await _context.Trades
+                .FirstOrDefaultAsync(x =>
+                    x.Id == request.TradeId.Value &&
+                    x.SchoolId == schoolId);
+
+            if (trade == null)
+            {
+                return (
+                    false,
+                    null,
+                    "Trade not found in this school."
+                );
+            }
+        }
+
+
+
         if (string.IsNullOrWhiteSpace(name))
         {
             return (
@@ -81,8 +149,14 @@ public class SubjectService : ISubjectService
             Id = Guid.NewGuid(),
             SchoolId = schoolId,
             Name = name,
-            Code = code
+            Code = code,
+
+            Type = request.Type,
+
+            DepartmentId = request.DepartmentId,
+            TradeId = request.TradeId
         };
+
 
         _context.Subjects.Add(subject);
 
@@ -114,7 +188,17 @@ public class SubjectService : ISubjectService
                 x.Id,
                 x.Name,
                 x.Code,
-                x.SchoolId
+                x.SchoolId,
+                type = x.Type,
+                departmentId = x.DepartmentId,
+                departmentName = x.Department != null
+        ? x.Department.Name
+        : null,
+
+                tradeId = x.TradeId,
+                tradeName = x.Trade != null
+        ? x.Trade.Name
+        : null
             })
             .ToListAsync();
     }
@@ -134,7 +218,17 @@ public class SubjectService : ISubjectService
                 x.Id,
                 x.Name,
                 x.Code,
-                x.SchoolId
+                x.SchoolId,
+                type = x.Type,
+                departmentId = x.DepartmentId,
+                departmentName = x.Department != null
+        ? x.Department.Name
+        : null,
+
+                tradeId = x.TradeId,
+                tradeName = x.Trade != null
+        ? x.Trade.Name
+        : null
             })
             .FirstOrDefaultAsync();
 
