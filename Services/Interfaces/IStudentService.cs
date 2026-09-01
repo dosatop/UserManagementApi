@@ -54,10 +54,10 @@ public interface IStudentService
         UpdateStudentAcademicPathRequest request);
 
     Task<(bool Success, object? Data, string? Error)>
-AssignTradeAsync(
-    Guid schoolId,
-    Guid studentId,
-    Guid tradeId, Guid tradeSubjectId);
+    AssignTradeAsync(
+        Guid schoolId,
+        Guid studentId,
+        Guid tradeId, Guid tradeSubjectId);
 
     Task<(bool Success, object? Data, string? Error)>
         UnassignTradeAsync(
