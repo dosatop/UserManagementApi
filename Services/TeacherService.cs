@@ -595,6 +595,68 @@ public class TeacherService(
         );
     }
 
+public async Task<(bool Success, object? Data, string? Error)>
+    GetTeachersAssignedToSubjectAsync(
+        Guid schoolId,
+        Guid subjectId)
+{
+    // ------------------------------------------------------------
+    // SUBJECT VALIDATION
+    // ------------------------------------------------------------
+
+    var subject = await _context.Subjects
+        .FirstOrDefaultAsync(x =>
+            x.Id == subjectId &&
+            x.SchoolId == schoolId);
+
+    if (subject == null)
+    {
+        return (
+            false,
+            null,
+            "Subject not found in this school."
+        );
+    }
+
+    // ------------------------------------------------------------
+    // GET TEACHER ASSIGNMENTS
+    // ------------------------------------------------------------
+
+    var assignments = await _context.TeacherSubjects
+        .Where(x =>
+            x.SubjectId == subjectId &&
+            x.Teacher.SchoolId == schoolId)
+        .Include(x => x.Teacher)
+            .ThenInclude(x => x.User)
+        .Include(x => x.Class)
+        .Select(x => new
+        {
+            assignmentId = x.Id,
+
+            teacherId = x.TeacherId,
+            teacherName = x.Teacher.User.FullName,
+            email = x.Teacher.User.Email,
+
+            subjectId = x.SubjectId,
+            subjectName = subject.Name,
+            subjectCode = subject.Code,
+
+            classId = x.ClassId,
+            className = x.Class.Name
+        })
+        .ToListAsync();
+
+    // ------------------------------------------------------------
+    // RESPONSE
+    // ------------------------------------------------------------
+
+    return (
+        true,
+        assignments,
+        null
+    );
+}
+
 
     // ================================================================
     // REMOVE TEACHING SUBJECT

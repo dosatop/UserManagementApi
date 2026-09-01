@@ -51,6 +51,12 @@ public interface ITeacherService
             AssignTeachingSubjectRequest request);
 
     Task<(bool Success, object? Data, string? Error)>
+GetTeachersAssignedToSubjectAsync(
+Guid schoolId,
+Guid subjectId);
+
+
+    Task<(bool Success, object? Data, string? Error)>
         RemoveTeachingSubjectAsync(
             Guid schoolId,
             Guid assignmentId);

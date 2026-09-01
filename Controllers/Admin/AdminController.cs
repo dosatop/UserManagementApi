@@ -1118,6 +1118,36 @@ public class AdminController(IAdminService adminService, ITeacherService teacher
         return Ok(result.Data);
     }
 
+    [HttpGet("{subjectId}/teachers")]
+    public async Task<IActionResult> GetTeachersAssignedToSubject(
+        Guid subjectId)
+    {
+        var schoolId = GetSchoolId(); // however you currently obtain schoolId
+        
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result =
+            await _teacherService.GetTeachersAssignedToSubjectAsync(
+                schoolId.Value,
+                subjectId);
+
+        if (!result.Success)
+        {
+            return NotFound(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
 
     [HttpPost("classes/{classId:guid}/class-teacher/{teacherId:guid}")]
     public async Task<IActionResult> AssignClassTeacher(
