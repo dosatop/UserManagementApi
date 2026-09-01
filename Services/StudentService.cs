@@ -530,122 +530,317 @@ public class StudentService : IStudentService
     // ================================================================
 
     public async Task<(bool Success, object? Data, string? Error)>
-        UpdateStudentAsync(
-            Guid schoolId,
-            Guid studentId,
-            UpdateStudentRequest request)
+    UpdateStudentAsync(
+        Guid schoolId,
+        Guid studentId,
+        UpdateStudentRequest request)
+{
+    // ============================================================
+    // STUDENT
+    // ============================================================
+
+    var student = await _context.StudentProfiles
+        .Include(x => x.User)
+        .FirstOrDefaultAsync(x =>
+            x.Id == studentId &&
+            x.SchoolId == schoolId);
+
+    if (student == null)
     {
-        var student = await _context.StudentProfiles
-            .Include(x => x.User)
-            .FirstOrDefaultAsync(x =>
-                x.Id == studentId &&
-                x.SchoolId == schoolId);
-
-        if (student == null)
-        {
-            return (
-                false,
-                null,
-                "Student not found."
-            );
-        }
-
-        // ------------------------------------------------------------
-        // Check class
-        // ------------------------------------------------------------
-
-        var classroom = await _context.Classes
-            .FirstOrDefaultAsync(x =>
-                x.Id == request.ClassRoomId &&
-                x.SchoolId == schoolId);
-
-        if (classroom == null)
-        {
-            return (
-                false,
-                null,
-                "Class does not belong to this school."
-            );
-        }
-
-        // ------------------------------------------------------------
-        // Check student number
-        // ------------------------------------------------------------
-
-        var studentNumberExists =
-            await _context.StudentProfiles
-                .AnyAsync(x =>
-                    x.SchoolId == schoolId &&
-                    x.StudentNumber == request.StudentNumber &&
-                    x.Id != studentId);
-
-        if (studentNumberExists)
-        {
-            return (
-                false,
-                null,
-                "A student with this student number already exists in this school."
-            );
-        }
-
-        // ------------------------------------------------------------
-        // Check email
-        // ------------------------------------------------------------
-
-        var emailExists =
-            await _context.Users
-                .AnyAsync(x =>
-                    x.Email == request.Email &&
-                    x.Id != student.UserId);
-
-        if (emailExists)
-        {
-            return (
-                false,
-                null,
-                "A user with this email already exists."
-            );
-        }
-
-        // ------------------------------------------------------------
-        // Update User
-        // ------------------------------------------------------------
-
-        student.User.FullName = request.FullName;
-        student.User.Email = request.Email;
-        student.User.UserName = request.Email;
-        student.User.PhoneNumber = request.PhoneNumber;
-
-        // ------------------------------------------------------------
-        // Update Student Profile
-        // ------------------------------------------------------------
-
-        student.StudentNumber = request.StudentNumber;
-        student.ClassId = request.ClassRoomId;
-
-        await _context.SaveChangesAsync();
-
         return (
-            true,
-            new
-            {
-                studentId = student.Id,
-                userId = student.UserId,
-
-                fullName = student.User.FullName,
-                email = student.User.Email,
-                phoneNumber = student.User.PhoneNumber,
-
-                studentNumber = student.StudentNumber,
-
-                classId = classroom.Id,
-                className = classroom.Name,
-
-                schoolId = student.SchoolId
-            },
-            null
+            false,
+            null,
+            "Student not found."
         );
     }
+
+    // ============================================================
+    // BASIC VALIDATION
+    // ============================================================
+
+    if (string.IsNullOrWhiteSpace(request.FullName))
+    {
+        return (
+            false,
+            null,
+            "Full name is required."
+        );
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Email))
+    {
+        return (
+            false,
+            null,
+            "Email is required."
+        );
+    }
+
+    if (string.IsNullOrWhiteSpace(request.StudentNumber))
+    {
+        return (
+            false,
+            null,
+            "Student number is required."
+        );
+    }
+
+    // ============================================================
+    // CLASS
+    // ============================================================
+
+    var classroom = await _context.Classes
+        .FirstOrDefaultAsync(x =>
+            x.Id == request.ClassRoomId &&
+            x.SchoolId == schoolId);
+
+    if (classroom == null)
+    {
+        return (
+            false,
+            null,
+            "Class does not belong to this school."
+        );
+    }
+
+    // ============================================================
+    // STUDENT NUMBER
+    // ============================================================
+
+    var studentNumberExists =
+        await _context.StudentProfiles
+            .AnyAsync(x =>
+                x.SchoolId == schoolId &&
+                x.StudentNumber == request.StudentNumber &&
+                x.Id != studentId);
+
+    if (studentNumberExists)
+    {
+        return (
+            false,
+            null,
+            "A student with this student number already exists in this school."
+        );
+    }
+
+    // ============================================================
+    // EMAIL
+    // ============================================================
+
+    var email = request.Email.Trim();
+
+    var emailExists =
+        await _context.Users
+            .AnyAsync(x =>
+                x.Email == email &&
+                x.Id != student.UserId);
+
+    if (emailExists)
+    {
+        return (
+            false,
+            null,
+            "A user with this email already exists."
+        );
+    }
+
+    // ============================================================
+    // ACADEMIC PATH
+    // ============================================================
+
+    Department? department = null;
+    Trade? trade = null;
+    Subject? tradeSubject = null;
+
+    // ============================================================
+    // SENIOR STUDENT
+    // ============================================================
+
+    if (classroom.Level == SchoolLevel.Senior)
+    {
+        if (!request.DepartmentId.HasValue ||
+            request.DepartmentId.Value == Guid.Empty)
+        {
+            return (
+                false,
+                null,
+                "A department is required for Senior students."
+            );
+        }
+
+        department = await _context.Departments
+            .FirstOrDefaultAsync(x =>
+                x.Id == request.DepartmentId.Value &&
+                x.SchoolId == schoolId);
+
+        if (department == null)
+        {
+            return (
+                false,
+                null,
+                "Department does not belong to this school."
+            );
+        }
+    }
+
+    // ============================================================
+    // JUNIOR STUDENT
+    // ============================================================
+
+    if (classroom.Level == SchoolLevel.Junior)
+    {
+        if (request.DepartmentId.HasValue &&
+            request.DepartmentId.Value != Guid.Empty)
+        {
+            return (
+                false,
+                null,
+                "Junior students cannot be assigned to a department."
+            );
+        }
+    }
+
+    // ============================================================
+    // TRADE
+    // ============================================================
+
+    if (request.TradeId.HasValue &&
+        request.TradeId.Value != Guid.Empty)
+    {
+        trade = await _context.Trades
+            .FirstOrDefaultAsync(x =>
+                x.Id == request.TradeId.Value &&
+                x.SchoolId == schoolId);
+
+        if (trade == null)
+        {
+            return (
+                false,
+                null,
+                "Trade does not belong to this school."
+            );
+        }
+    }
+
+    // ============================================================
+    // TRADE SUBJECT
+    // ============================================================
+
+    if (request.TradeSubjectId.HasValue &&
+        request.TradeSubjectId.Value != Guid.Empty)
+    {
+        // A trade subject must have a trade
+        if (trade == null)
+        {
+            return (
+                false,
+                null,
+                "A trade must be selected before selecting a trade subject."
+            );
+        }
+
+        tradeSubject = await _context.Subjects
+            .FirstOrDefaultAsync(x =>
+                x.Id == request.TradeSubjectId.Value &&
+                x.SchoolId == schoolId &&
+                x.Type == SubjectType.Trade &&
+                x.TradeId == trade.Id);
+
+        if (tradeSubject == null)
+        {
+            return (
+                false,
+                null,
+                "The selected trade subject does not belong to the selected trade."
+            );
+        }
+    }
+
+    // ============================================================
+    // UPDATE USER
+    // ============================================================
+
+    student.User.FullName =
+        request.FullName.Trim();
+
+    student.User.Email =
+        email;
+
+    student.User.UserName =
+        email;
+
+    student.User.PhoneNumber =
+        string.IsNullOrWhiteSpace(request.PhoneNumber)
+            ? null
+            : request.PhoneNumber.Trim();
+
+    // ============================================================
+    // UPDATE STUDENT
+    // ============================================================
+
+    student.StudentNumber =
+        request.StudentNumber.Trim();
+
+    student.ClassId =
+        classroom.Id;
+
+    // Always derive level from class
+    student.SchoolLevel =
+        classroom.Level;
+
+    // Senior gets department
+    // Junior gets null
+    student.DepartmentId =
+        department?.Id;
+
+    // Trade is optional
+    student.TradeId =
+        trade?.Id;
+
+    // Trade subject is optional
+    student.TradeSubjectId =
+        tradeSubject?.Id;
+
+    await _context.SaveChangesAsync();
+
+    // ============================================================
+    // RESPONSE
+    // ============================================================
+
+    return (
+        true,
+        new
+        {
+            studentId = student.Id,
+            userId = student.UserId,
+
+            studentNumber = student.StudentNumber,
+
+            studentName = student.User.FullName,
+            email = student.User.Email,
+            phoneNumber = student.User.PhoneNumber,
+
+            schoolId = student.SchoolId,
+
+            classId = classroom.Id,
+            className = classroom.Name,
+
+            schoolLevel = classroom.Level.ToString(),
+            schoolLevelId = (int)classroom.Level,
+
+            departmentId = department?.Id,
+            departmentName = department?.Name,
+
+            tradeId = trade?.Id,
+            tradeName = trade?.Name,
+
+            tradeSubjectId = tradeSubject?.Id,
+            tradeSubjectName = tradeSubject?.Name,
+            tradeSubjectCode = tradeSubject?.Code
+        },
+        null
+    );
+}
 
     // ================================================================
     // DELETE
