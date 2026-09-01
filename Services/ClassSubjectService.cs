@@ -17,7 +17,6 @@ public class ClassSubjectService : IClassSubjectService
 // ============================================================
 // ASSIGN SUBJECT TO CLASS
 // ============================================================
-
 public async Task<(bool Success, object? Data, string? Error)>
     AssignSubjectToClassAsync(
         Guid schoolId,
@@ -57,20 +56,6 @@ public async Task<(bool Success, object? Data, string? Error)>
             false,
             null,
             "Subject not found in this school."
-        );
-    }
-
-    // --------------------------------------------------------
-    // TRADE SUBJECTS CANNOT BE ASSIGNED TO A CLASS
-    // --------------------------------------------------------
-
-    if (subject.TradeId.HasValue)
-    {
-        return (
-            false,
-            null,
-            "Trade subjects cannot be assigned directly to a class. " +
-            "Students must first choose a trade."
         );
     }
 
@@ -127,6 +112,18 @@ public async Task<(bool Success, object? Data, string? Error)>
             subjectName = subject.Name,
             subjectCode = subject.Code,
 
+            subjectType = subject.Type,
+
+            departmentId = subject.DepartmentId,
+            departmentName = subject.Department != null
+                ? subject.Department.Name
+                : null,
+
+            tradeId = subject.TradeId,
+            tradeName = subject.Trade != null
+                ? subject.Trade.Name
+                : null,
+
             message =
                 "Subject assigned to class successfully."
         },
@@ -134,34 +131,48 @@ public async Task<(bool Success, object? Data, string? Error)>
     );
 }
 
+
     // ============================================================
     // GET SUBJECTS FOR CLASS
     // ============================================================
 
-    public async Task<IEnumerable<object>>
-        GetClassSubjectsAsync(
-            Guid schoolId,
-            Guid classId)
-    {
-        return await _context.ClassSubjects
-            .AsNoTracking()
-            .Where(x =>
-                x.SchoolId == schoolId &&
-                x.ClassId == classId)
-            .OrderBy(x => x.Subject.Name)
-            .Select(x => new
-            {
-                classSubjectId = x.Id,
+   public async Task<IEnumerable<object>>
+    GetClassSubjectsAsync(
+        Guid schoolId,
+        Guid classId)
+{
+    return await _context.ClassSubjects
+        .AsNoTracking()
+        .Where(x =>
+            x.SchoolId == schoolId &&
+            x.ClassId == classId)
+        .OrderBy(x => x.Subject.Name)
+        .Select(x => new
+        {
+            classSubjectId = x.Id,
 
-                subjectId = x.SubjectId,
-                subjectName = x.Subject.Name,
-                subjectCode = x.Subject.Code,
+            subjectId = x.SubjectId,
+            subjectName = x.Subject.Name,
+            subjectCode = x.Subject.Code,
 
-                classId = x.ClassId,
-                className = x.Class.Name
-            })
-            .ToListAsync();
-    }
+            subjectType = x.Subject.Type,
+
+            departmentId = x.Subject.DepartmentId,
+            departmentName = x.Subject.Department != null
+                ? x.Subject.Department.Name
+                : null,
+
+            tradeId = x.Subject.TradeId,
+            tradeName = x.Subject.Trade != null
+                ? x.Subject.Trade.Name
+                : null,
+
+            classId = x.ClassId,
+            className = x.Class.Name
+        })
+        .ToListAsync();
+}
+
 
 
     // ============================================================

@@ -1,3 +1,4 @@
+using UserManagementApi.Models;
 using UserManagementApi.Models.SchoolModels;
 
 namespace UserManagementApi.DTOs.Admin;
@@ -129,16 +130,28 @@ public class AdminTeacherClassTeacherDto
 
     public string ClassName { get; set; } = string.Empty;
 }
-
 public class AdminSubjectDto
 {
     public Guid SubjectId { get; set; }
+
     public Guid SchoolId { get; set; }
 
-    public string? SubjectName { get; set; }
+    public string SubjectName { get; set; } = string.Empty;
+
     public string? Code { get; set; }
 
-    public List<AdminSubjectTeacherDto> TeacherSubjects { get; set; } = [];
+    public SubjectType Type { get; set; }
+
+    public Guid? DepartmentId { get; set; }
+
+    public string? DepartmentName { get; set; }
+
+    public Guid? TradeId { get; set; }
+
+    public string? TradeName { get; set; }
+
+    public List<AdminSubjectTeacherDto> TeacherSubjects { get; set; }
+        = new();
 }
 
 public class AdminSubjectTeacherDto

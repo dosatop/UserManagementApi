@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using UserManagementApi.Data;
 using UserManagementApi.DTOs.Admin;
 using UserManagementApi.DTOs.Auth.Roles;
+using UserManagementApi.Models;
 using UserManagementApi.Models.SchoolModels;
 using UserManagementApi.Services;
 
@@ -244,32 +245,54 @@ public class AdminService(ApplicationDbContext context) : IAdminService
             return null;
         }
 
-        // ============================================================
-        // SUBJECTS
-        // ============================================================
-
         student.Subjects = await _context.Subjects
-            .AsNoTracking()
-            .Where(x =>
-                x.SchoolId == schoolId &&
-                (
-                    // Normal class subjects
-                    x.ClassSubjects.Any(cs =>
-                        cs.ClassId == student.ClassId)
+     .AsNoTracking()
+     .Where(x =>
+         x.SchoolId == schoolId &&
 
-                    ||
+         // Subject must be assigned to the student's class
+         x.ClassSubjects.Any(cs =>
+             cs.ClassId == student.ClassId) &&
 
-                    // The student's selected trade subject
-                    x.Id == student.TradeSubjectId
-                ))
-            .OrderBy(x => x.Name)
-            .Select(x => new AdminStudentSubjectDto
-            {
-                SubjectId = x.Id,
-                SubjectName = x.Name,
-                Code = x.Code
-            })
-            .ToListAsync();
+         (
+             // ========================================================
+             // GENERAL SUBJECT
+             // ========================================================
+             // Every student in the class can take it.
+             x.Type == SubjectType.General
+
+             ||
+
+             // ========================================================
+             // DEPARTMENT SUBJECT
+             // ========================================================
+             // Student must belong to the subject's department.
+             (
+                 x.Type == SubjectType.Department &&
+                 x.DepartmentId == student.DepartmentId
+             )
+
+             ||
+
+             // ========================================================
+             // TRADE SUBJECT
+             // ========================================================
+             // Student must have selected this exact trade subject.
+             (
+                 x.Type == SubjectType.Trade &&
+                 x.Id == student.TradeSubjectId
+             )
+         )
+     )
+     .OrderBy(x => x.Name)
+     .Select(x => new AdminStudentSubjectDto
+     {
+         SubjectId = x.Id,
+         SubjectName = x.Name,
+         Code = x.Code
+     })
+     .ToListAsync();
+
 
         // ============================================================
         // RESULTS
@@ -488,6 +511,7 @@ public class AdminService(ApplicationDbContext context) : IAdminService
         return await _context.Subjects
             .AsNoTracking()
             .Where(x => x.SchoolId == schoolId)
+            .OrderBy(x => x.Name)
             .Select(x => new AdminSubjectDto
             {
                 SubjectId = x.Id,
@@ -495,6 +519,36 @@ public class AdminService(ApplicationDbContext context) : IAdminService
 
                 SubjectName = x.Name,
                 Code = x.Code,
+
+                // ========================================================
+                // SUBJECT TYPE
+                // ========================================================
+
+                Type = x.Type,
+
+                // ========================================================
+                // DEPARTMENT
+                // ========================================================
+
+                DepartmentId = x.DepartmentId,
+
+                DepartmentName = x.Department != null
+                    ? x.Department.Name
+                    : null,
+
+                // ========================================================
+                // TRADE
+                // ========================================================
+
+                TradeId = x.TradeId,
+
+                TradeName = x.Trade != null
+                    ? x.Trade.Name
+                    : null,
+
+                // ========================================================
+                // TEACHERS
+                // ========================================================
 
                 TeacherSubjects = x.TeacherSubjects
                     .Select(ts => new AdminSubjectTeacherDto
@@ -508,4 +562,5 @@ public class AdminService(ApplicationDbContext context) : IAdminService
             })
             .ToListAsync();
     }
+
 }
