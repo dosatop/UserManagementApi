@@ -32,6 +32,8 @@ public class ApplicationDbContext(
     public DbSet<Department> Departments { get; set; }
 
     public DbSet<Trade> Trades { get; set; }
+    public DbSet<AcademicTerm> AcademicTerms { get; set; } = null!;
+
 
 
 
@@ -479,9 +481,9 @@ public class ApplicationDbContext(
             .OnDelete(DeleteBehavior.Restrict);
 
 
-        // ============================================================
+        // ================================================================
         // ACADEMIC SESSION
-        // ============================================================
+        // ================================================================
 
         builder.Entity<AcademicSession>()
             .HasKey(x => x.Id);
@@ -497,14 +499,51 @@ public class ApplicationDbContext(
             .IsRequired();
 
         builder.Entity<AcademicSession>()
-            .Property(x => x.Term)
-            .IsRequired();
+            .HasIndex(x => new
+            {
+                x.SchoolId,
+                x.Session
+            })
+            .IsUnique();
 
-        // Index for finding the current session for a school
+        // Index for finding the current session
         builder.Entity<AcademicSession>()
             .HasIndex(x => new
             {
                 x.SchoolId,
+                x.IsCurrent
+            });
+
+
+        // ================================================================
+        // ACADEMIC TERM
+        // ================================================================
+
+        builder.Entity<AcademicTerm>()
+            .HasKey(x => x.Id);
+
+        builder.Entity<AcademicTerm>()
+            .HasOne(x => x.AcademicSession)
+            .WithMany(x => x.Terms)
+            .HasForeignKey(x => x.AcademicSessionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<AcademicTerm>()
+            .Property(x => x.Term)
+            .IsRequired();
+
+        builder.Entity<AcademicTerm>()
+            .HasIndex(x => new
+            {
+                x.AcademicSessionId,
+                x.Term
+            })
+            .IsUnique();
+
+        builder.Entity<AcademicTerm>()
+            .HasIndex(x => new
+            {
+                x.AcademicSessionId,
                 x.IsCurrent
             });
 
@@ -656,5 +695,7 @@ public class ApplicationDbContext(
                 x.Term
             })
             .IsUnique();
+
     }
+
 }

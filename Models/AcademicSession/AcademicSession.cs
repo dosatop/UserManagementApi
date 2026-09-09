@@ -12,7 +12,6 @@ public class AcademicSession
 
     public string Session { get; set; } = string.Empty;
 
-    public string Term { get; set; } = string.Empty;
     public DateTime StartDate { get; set; }
 
     public DateTime EndDate { get; set; }
@@ -20,4 +19,11 @@ public class AcademicSession
     public bool IsCurrent { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    // ================================================================
+    // ACADEMIC TERMS
+    // ================================================================
+
+    public ICollection<AcademicTerm> Terms { get; set; }
+        = new List<AcademicTerm>();
 }

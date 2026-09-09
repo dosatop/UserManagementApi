@@ -15,7 +15,7 @@ public class AcademicSessionService(
     // CREATE
     // ================================================================
 
-  public async Task<(bool Success, object? Data, string? Error)>
+ public async Task<(bool Success, object? Data, string? Error)>
     CreateAsync(
         Guid schoolId,
         CreateAcademicSessionRequest request)
@@ -29,19 +29,6 @@ public class AcademicSessionService(
         );
     }
 
-    if (string.IsNullOrWhiteSpace(request.Term))
-    {
-        return (
-            false,
-            null,
-            "Term is required."
-        );
-    }
-
-    // ============================================================
-    // VALIDATE DATES
-    // ============================================================
-
     if (request.EndDate < request.StartDate)
     {
         return (
@@ -52,30 +39,20 @@ public class AcademicSessionService(
     }
 
     var session = request.Session.Trim();
-    var term = request.Term.Trim();
-
-    // ============================================================
-    // CHECK DUPLICATE
-    // ============================================================
 
     var exists = await _context.AcademicSessions
         .AnyAsync(x =>
             x.SchoolId == schoolId &&
-            x.Session == session &&
-            x.Term == term);
+            x.Session == session);
 
     if (exists)
     {
         return (
             false,
             null,
-            "This academic session and term already exists."
+            "This academic session already exists."
         );
     }
-
-    // ============================================================
-    // CREATE
-    // ============================================================
 
     var academicSession = new AcademicSession
     {
@@ -84,7 +61,6 @@ public class AcademicSessionService(
         SchoolId = schoolId,
 
         Session = session,
-        Term = term,
 
         StartDate = request.StartDate,
         EndDate = request.EndDate,
@@ -98,26 +74,16 @@ public class AcademicSessionService(
 
     await _context.SaveChangesAsync();
 
-    // ============================================================
-    // RESPONSE
-    // ============================================================
-
     return (
         true,
         new
         {
             id = academicSession.Id,
-
             schoolId = academicSession.SchoolId,
-
             session = academicSession.Session,
-            term = academicSession.Term,
-
             startDate = academicSession.StartDate,
             endDate = academicSession.EndDate,
-
             isCurrent = academicSession.IsCurrent,
-
             createdAt = academicSession.CreatedAt
         },
         null
@@ -127,7 +93,6 @@ public class AcademicSessionService(
 // ================================================================
 // GET ALL
 // ================================================================
-
 public async Task<(bool Success, object? Data, string? Error)>
     GetAllAsync(
         Guid schoolId)
@@ -143,7 +108,6 @@ public async Task<(bool Success, object? Data, string? Error)>
             schoolId = x.SchoolId,
 
             session = x.Session,
-            term = x.Term,
 
             startDate = x.StartDate,
             endDate = x.EndDate,
@@ -165,7 +129,6 @@ public async Task<(bool Success, object? Data, string? Error)>
 // ================================================================
 // GET CURRENT
 // ================================================================
-
 public async Task<(bool Success, object? Data, string? Error)>
     GetCurrentAsync(
         Guid schoolId)
@@ -182,7 +145,6 @@ public async Task<(bool Success, object? Data, string? Error)>
             schoolId = x.SchoolId,
 
             session = x.Session,
-            term = x.Term,
 
             startDate = x.StartDate,
             endDate = x.EndDate,
@@ -210,10 +172,10 @@ public async Task<(bool Success, object? Data, string? Error)>
 }
 
 
+
 // ================================================================
 // GET BY ID
 // ================================================================
-
 public async Task<(bool Success, object? Data, string? Error)>
     GetByIdAsync(
         Guid schoolId,
@@ -232,7 +194,6 @@ public async Task<(bool Success, object? Data, string? Error)>
                 schoolId = x.SchoolId,
 
                 session = x.Session,
-                term = x.Term,
 
                 startDate = x.StartDate,
                 endDate = x.EndDate,
@@ -260,10 +221,10 @@ public async Task<(bool Success, object? Data, string? Error)>
 }
 
 
+
 // ================================================================
 // UPDATE
 // ================================================================
-
 public async Task<(bool Success, object? Data, string? Error)>
     UpdateAsync(
         Guid schoolId,
@@ -294,19 +255,6 @@ public async Task<(bool Success, object? Data, string? Error)>
         );
     }
 
-    if (string.IsNullOrWhiteSpace(request.Term))
-    {
-        return (
-            false,
-            null,
-            "Term is required."
-        );
-    }
-
-    // ============================================================
-    // VALIDATE DATES
-    // ============================================================
-
     if (request.EndDate < request.StartDate)
     {
         return (
@@ -317,7 +265,6 @@ public async Task<(bool Success, object? Data, string? Error)>
     }
 
     var session = request.Session.Trim();
-    var term = request.Term.Trim();
 
     // ============================================================
     // DUPLICATE
@@ -327,15 +274,14 @@ public async Task<(bool Success, object? Data, string? Error)>
         .AnyAsync(x =>
             x.Id != sessionId &&
             x.SchoolId == schoolId &&
-            x.Session == session &&
-            x.Term == term);
+            x.Session == session);
 
     if (duplicate)
     {
         return (
             false,
             null,
-            "This academic session and term already exists."
+            "This academic session already exists."
         );
     }
 
@@ -344,7 +290,6 @@ public async Task<(bool Success, object? Data, string? Error)>
     // ============================================================
 
     academicSession.Session = session;
-    academicSession.Term = term;
 
     academicSession.StartDate = request.StartDate;
     academicSession.EndDate = request.EndDate;
@@ -364,7 +309,6 @@ public async Task<(bool Success, object? Data, string? Error)>
             schoolId = academicSession.SchoolId,
 
             session = academicSession.Session,
-            term = academicSession.Term,
 
             startDate = academicSession.StartDate,
             endDate = academicSession.EndDate,
@@ -378,10 +322,10 @@ public async Task<(bool Success, object? Data, string? Error)>
 }
 
 
+
 // ================================================================
 // ACTIVATE
 // ================================================================
-
 public async Task<(bool Success, object? Data, string? Error)>
     ActivateAsync(
         Guid schoolId,
@@ -403,18 +347,10 @@ public async Task<(bool Success, object? Data, string? Error)>
         );
     }
 
-    // ============================================================
-    // DEACTIVATE EVERYTHING ELSE
-    // ============================================================
-
     foreach (var session in sessions)
     {
         session.IsCurrent = false;
     }
-
-    // ============================================================
-    // ACTIVATE SELECTED SESSION
-    // ============================================================
 
     selectedSession.IsCurrent = true;
 
@@ -429,7 +365,6 @@ public async Task<(bool Success, object? Data, string? Error)>
             schoolId = selectedSession.SchoolId,
 
             session = selectedSession.Session,
-            term = selectedSession.Term,
 
             startDate = selectedSession.StartDate,
             endDate = selectedSession.EndDate,
@@ -443,10 +378,10 @@ public async Task<(bool Success, object? Data, string? Error)>
 }
 
 
+
 // ================================================================
 // DELETE
 // ================================================================
-
 public async Task<(bool Success, string? Error)>
     DeleteAsync(
         Guid schoolId,
@@ -466,7 +401,6 @@ public async Task<(bool Success, string? Error)>
         );
     }
 
-    // Don't allow deleting the active period
     if (academicSession.IsCurrent)
     {
         return (
@@ -484,4 +418,5 @@ public async Task<(bool Success, string? Error)>
         null
     );
 }
+
 }

@@ -151,13 +151,23 @@ public class ResultService(
     // ========================================================================
 
     private async Task<(bool Success, string? Session, string? Term, string? Error)>
-        GetCurrentAcademicPeriodAsync(Guid schoolId)
+GetCurrentAcademicPeriodAsync(Guid schoolId)
     {
         var period = await _context.AcademicSessions
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x =>
-                x.SchoolId == schoolId &&
-                x.IsCurrent);
+        .AsNoTracking()
+        .Where(x =>
+        x.SchoolId == schoolId &&
+        x.IsCurrent)
+        .Select(x => new
+        {
+            x.Session,
+
+            CurrentTerm = x.Terms
+                    .Where(t => t.IsCurrent)
+                    .Select(t => t.Term)
+                    .FirstOrDefault()
+        })
+            .FirstOrDefaultAsync();
 
         if (period == null)
         {
@@ -169,10 +179,20 @@ public class ResultService(
             );
         }
 
+        if (string.IsNullOrWhiteSpace(period.CurrentTerm))
+        {
+            return (
+                false,
+                null,
+                null,
+                "There is no active academic term."
+            );
+        }
+
         return (
             true,
             period.Session,
-            period.Term,
+            period.CurrentTerm,
             null
         );
     }
