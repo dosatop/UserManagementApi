@@ -1054,7 +1054,7 @@ public class AdminController(IAdminService adminService, ITeacherService teacher
         });
     }
 
-    [HttpPost("admin/parents/{parentId:guid}/students/{studentId:guid}")]
+    [HttpPost("/parents/{parentId:guid}/students/{studentId:guid}")]
     public async Task<IActionResult> AssignStudent(
     Guid parentId,
     Guid studentId)
@@ -1090,7 +1090,7 @@ public class AdminController(IAdminService adminService, ITeacherService teacher
     // REMOVE STUDENT FROM PARENT
     // ================================================================
 
-    [HttpDelete("admin/parents/{parentId:guid}/students/{studentId:guid}")]
+    [HttpDelete("/parents/{parentId:guid}/students/{studentId:guid}")]
     public async Task<IActionResult> RemoveStudent(
         Guid parentId,
         Guid studentId)
