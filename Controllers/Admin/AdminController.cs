@@ -1054,6 +1054,76 @@ public class AdminController(IAdminService adminService, ITeacherService teacher
         });
     }
 
+    [HttpPost("admin/parents/{parentId:guid}/students/{studentId:guid}")]
+    public async Task<IActionResult> AssignStudent(
+    Guid parentId,
+    Guid studentId)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _parentService.AssignStudentAsync(
+            schoolId.Value,
+            parentId,
+            studentId);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
+
+    // ================================================================
+    // REMOVE STUDENT FROM PARENT
+    // ================================================================
+
+    [HttpDelete("admin/parents/{parentId:guid}/students/{studentId:guid}")]
+    public async Task<IActionResult> RemoveStudent(
+        Guid parentId,
+        Guid studentId)
+    {
+        var schoolId = GetSchoolId();
+
+        if (schoolId == null)
+        {
+            return BadRequest(new
+            {
+                message = "Admin account is not assigned to a school."
+            });
+        }
+
+        var result = await _parentService.RemoveStudentAsync(
+            schoolId.Value,
+            parentId,
+            studentId);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(new
+        {
+            message = "Student removed from parent successfully."
+        });
+    }
+
 
     [HttpGet("classes/{classId:guid}/students")]
     public async Task<IActionResult> GetClassStudents(
@@ -1123,7 +1193,7 @@ public class AdminController(IAdminService adminService, ITeacherService teacher
         Guid subjectId)
     {
         var schoolId = GetSchoolId(); // however you currently obtain schoolId
-        
+
         if (schoolId == null)
         {
             return BadRequest(new
