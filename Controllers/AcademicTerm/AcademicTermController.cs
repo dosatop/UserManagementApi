@@ -12,225 +12,213 @@ namespace UserManagementApi.Controllers;
 public class AcademicTermsController(
 IAcademicTermService academicTermService) : ControllerBase
 {
-private readonly IAcademicTermService _academicTermService =
-academicTermService;
+    private readonly IAcademicTermService _academicTermService =
+    academicTermService;
 
-// ================================================================
-// GET SCHOOL ID
-// ================================================================
+    // ================================================================
+    // GET SCHOOL ID
+    // ================================================================
 
-private bool TryGetSchoolId(out Guid schoolId)
-{
-    schoolId = Guid.Empty;
-
-    var schoolIdClaim =
-        User.FindFirst("schoolId")?.Value;
-
-    if (string.IsNullOrWhiteSpace(schoolIdClaim))
+    protected Guid? GetSchoolId()
     {
-        return false;
+        var value = User.FindFirst("SchoolId")?.Value;
+
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        return Guid.TryParse(value, out var schoolId)
+            ? schoolId
+            : null;
     }
 
-    return Guid.TryParse(
-        schoolIdClaim,
-        out schoolId);
-}
 
 
-// ================================================================
-// CREATE
-// ================================================================
+    // ================================================================
+    // CREATE
+    // ================================================================
 
-[HttpPost]
-public async Task<IActionResult> Create(
-    [FromBody] CreateAcademicTermRequest request)
-{
-    if (!TryGetSchoolId(out var schoolId))
+    [HttpPost]
+    public async Task<IActionResult> Create(
+        [FromBody] CreateAcademicTermRequest request)
     {
-        return Unauthorized(new
+        var schoolId = GetSchoolId();
+
+        if (!schoolId.HasValue)
         {
-            success = false,
-            error = "School information not found."
+            return Unauthorized();
+        }
+
+        var result =
+            await _academicTermService.CreateAsync(
+                schoolId.Value,
+                request);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                error = result.Error
+            });
+        }
+
+        return Ok(new
+        {
+            success = true,
+            data = result.Data
         });
     }
 
-    var result =
-        await _academicTermService.CreateAsync(
-            schoolId,
-            request);
 
-    if (!result.Success)
+    // ================================================================
+    // GET ALL TERMS FOR SESSION
+    // ================================================================
+
+    [HttpGet("session/{academicSessionId:guid}")]
+    public async Task<IActionResult> GetAll(
+        Guid academicSessionId)
     {
-        return BadRequest(new
+        var schoolId = GetSchoolId();
+
+        if (!schoolId.HasValue)
         {
-            success = false,
-            error = result.Error
+            return Unauthorized();
+        }
+
+
+        var result =
+            await _academicTermService.GetAllAsync(
+                schoolId.Value,
+                academicSessionId);
+
+        if (!result.Success)
+        {
+            return NotFound(new
+            {
+                success = false,
+                error = result.Error
+            });
+        }
+
+        return Ok(new
+        {
+            success = true,
+            data = result.Data
         });
     }
 
-    return Ok(new
+
+    // ================================================================
+    // GET BY ID
+    // ================================================================
+
+    [HttpGet("{termId:guid}")]
+    public async Task<IActionResult> GetById(
+        Guid termId)
     {
-        success = true,
-        data = result.Data
-    });
-}
+        var schoolId = GetSchoolId();
 
-
-// ================================================================
-// GET ALL TERMS FOR SESSION
-// ================================================================
-
-[HttpGet("session/{academicSessionId:guid}")]
-public async Task<IActionResult> GetAll(
-    Guid academicSessionId)
-{
-    if (!TryGetSchoolId(out var schoolId))
-    {
-        return Unauthorized(new
+        if (!schoolId.HasValue)
         {
-            success = false,
-            error = "School information not found."
+            return Unauthorized();
+        }
+
+
+        var result =
+            await _academicTermService.GetByIdAsync(
+                schoolId.Value,
+                termId);
+
+        if (!result.Success)
+        {
+            return NotFound(new
+            {
+                success = false,
+                error = result.Error
+            });
+        }
+
+        return Ok(new
+        {
+            success = true,
+            data = result.Data
         });
     }
 
-    var result =
-        await _academicTermService.GetAllAsync(
-            schoolId,
-            academicSessionId);
 
-    if (!result.Success)
+    // ================================================================
+    // UPDATE
+    // ================================================================
+
+    [HttpPut("{termId:guid}")]
+    public async Task<IActionResult> Update(
+        Guid termId,
+        [FromBody] UpdateAcademicTermRequest request)
     {
-        return NotFound(new
+        var schoolId = GetSchoolId();
+
+        if (!schoolId.HasValue)
         {
-            success = false,
-            error = result.Error
+            return Unauthorized();
+        }
+
+        var result =
+            await _academicTermService.UpdateAsync(
+                schoolId.Value,
+                termId,
+                request);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                error = result.Error
+            });
+        }
+
+        return Ok(new
+        {
+            success = true,
+            data = result.Data
         });
     }
 
-    return Ok(new
+
+    // ================================================================
+    // DELETE
+    // ================================================================
+
+    [HttpDelete("{termId:guid}")]
+    public async Task<IActionResult> Delete(
+        Guid termId)
     {
-        success = true,
-        data = result.Data
-    });
-}
+        var schoolId = GetSchoolId();
 
-
-// ================================================================
-// GET BY ID
-// ================================================================
-
-[HttpGet("{termId:guid}")]
-public async Task<IActionResult> GetById(
-    Guid termId)
-{
-    if (!TryGetSchoolId(out var schoolId))
-    {
-        return Unauthorized(new
+        if (!schoolId.HasValue)
         {
-            success = false,
-            error = "School information not found."
+            return Unauthorized();
+        }
+
+        var result =
+            await _academicTermService.DeleteAsync(
+                schoolId.Value,
+                termId);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                error = result.Error
+            });
+        }
+
+        return Ok(new
+        {
+            success = true,
+            message = "Academic term deleted successfully."
         });
     }
-
-    var result =
-        await _academicTermService.GetByIdAsync(
-            schoolId,
-            termId);
-
-    if (!result.Success)
-    {
-        return NotFound(new
-        {
-            success = false,
-            error = result.Error
-        });
-    }
-
-    return Ok(new
-    {
-        success = true,
-        data = result.Data
-    });
-}
-
-
-// ================================================================
-// UPDATE
-// ================================================================
-
-[HttpPut("{termId:guid}")]
-public async Task<IActionResult> Update(
-    Guid termId,
-    [FromBody] UpdateAcademicTermRequest request)
-{
-    if (!TryGetSchoolId(out var schoolId))
-    {
-        return Unauthorized(new
-        {
-            success = false,
-            error = "School information not found."
-        });
-    }
-
-    var result =
-        await _academicTermService.UpdateAsync(
-            schoolId,
-            termId,
-            request);
-
-    if (!result.Success)
-    {
-        return BadRequest(new
-        {
-            success = false,
-            error = result.Error
-        });
-    }
-
-    return Ok(new
-    {
-        success = true,
-        data = result.Data
-    });
-}
-
-
-// ================================================================
-// DELETE
-// ================================================================
-
-[HttpDelete("{termId:guid}")]
-public async Task<IActionResult> Delete(
-    Guid termId)
-{
-    if (!TryGetSchoolId(out var schoolId))
-    {
-        return Unauthorized(new
-        {
-            success = false,
-            error = "School information not found."
-        });
-    }
-
-    var result =
-        await _academicTermService.DeleteAsync(
-            schoolId,
-            termId);
-
-    if (!result.Success)
-    {
-        return BadRequest(new
-        {
-            success = false,
-            error = result.Error
-        });
-    }
-
-    return Ok(new
-    {
-        success = true,
-        message = "Academic term deleted successfully."
-    });
-}
 
 }
