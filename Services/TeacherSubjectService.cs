@@ -90,8 +90,8 @@ public class TeacherSubjectService : ITeacherSubjectService
     }
 
     public async Task<IEnumerable<object>> GetTeacherSubjectsAsync(
-        Guid schoolId,
-        Guid teacherId)
+     Guid schoolId,
+     Guid teacherId)
     {
         return await _context.TeacherSubjects
             .AsNoTracking()
@@ -101,10 +101,17 @@ public class TeacherSubjectService : ITeacherSubjectService
             .Select(x => new
             {
                 x.SubjectId,
-                SubjectName = x.Subject.Name
+                SubjectName = x.Subject.Name,
+
+                Class = new
+                {
+                    x.ClassId,
+                    ClassName = x.Class.Name
+                }
             })
             .ToListAsync();
     }
+
 
     public async Task<(bool Success, string? Error)>
         RemoveSubjectAsync(
