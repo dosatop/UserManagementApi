@@ -3689,211 +3689,218 @@ public class TeacherPortalService(
         );
     }
 
-    public async Task<(bool Success, object? Data, string? Error)>
-    CreateAssignmentAsync(
+   public async Task<(
+    bool Success,
+    object? Data,
+    string? Error
+)> CreateAssignmentAsync(
     string userId,
     CreateAssignmentRequest request)
+{
+    // ============================================================
+    // GET TEACHER
+    // ============================================================
+
+    var teacher = await _context.Teachers
+        .AsNoTracking()
+        .FirstOrDefaultAsync(x =>
+            x.UserId == userId);
+
+    if (teacher == null)
     {
-        // ============================================================
-        // GET TEACHER
-        // ============================================================
-
-        var teacher = await _context.Teachers
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x =>
-                x.UserId == userId);
-
-        if (teacher == null)
-        {
-            return (
-                false,
-                null,
-                "Teacher profile not found."
-            );
-        }
-
-        var schoolId = teacher.SchoolId;
-
-        // ============================================================
-        // CURRENT ACADEMIC SESSION + CURRENT TERM
-        // ============================================================
-
-        var period = await _context.AcademicSessions
-            .AsNoTracking()
-            .Where(x =>
-                x.SchoolId == schoolId &&
-                x.IsCurrent)
-            .Select(x => new
-            {
-                x.Session,
-
-                CurrentTerm = x.Terms
-                    .Where(t => t.IsCurrent)
-                    .Select(t => t.Term)
-                    .FirstOrDefault()
-            })
-            .FirstOrDefaultAsync();
-
-        if (period == null)
-        {
-            return (
-                false,
-                null,
-                "There is no active academic session."
-            );
-        }
-
-        if (string.IsNullOrWhiteSpace(period.CurrentTerm))
-        {
-            return (
-                false,
-                null,
-                "There is no active academic term."
-            );
-        }
-
-        // ============================================================
-        // VALIDATE CLASS
-        // ============================================================
-
-        var classExists = await _context.TeacherClasses
-            .AsNoTracking()
-            .AnyAsync(x =>
-                x.TeacherId == teacher.Id &&
-                x.ClassId == request.ClassId &&
-                x.Class.SchoolId == schoolId);
-
-        if (!classExists)
-        {
-            return (
-                false,
-                null,
-                "You are not assigned to this class."
-            );
-        }
-
-        // ============================================================
-        // VALIDATE SUBJECT
-        // ============================================================
-
-        var subjectExists = await _context.TeacherSubjects
-            .AsNoTracking()
-            .AnyAsync(x =>
-                x.TeacherId == teacher.Id &&
-                x.SubjectId == request.SubjectId &&
-                x.Subject.SchoolId == schoolId);
-
-        if (!subjectExists)
-        {
-            return (
-                false,
-                null,
-                "You are not assigned to this subject."
-            );
-        }
-
-        // ============================================================
-        // VALIDATE TITLE
-        // ============================================================
-
-        if (string.IsNullOrWhiteSpace(request.Title))
-        {
-            return (
-                false,
-                null,
-                "Assignment title is required."
-            );
-        }
-
-        // ============================================================
-        // NORMALIZE DUE DATE
-        // ============================================================
-
-        DateTime? dueDateUtc = null;
-
-        if (!string.IsNullOrWhiteSpace(request.DueDate))
-        {
-            if (!DateTime.TryParse(
-                request.DueDate,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeUniversal |
-                DateTimeStyles.AdjustToUniversal,
-                out var parsedDate))
-            {
-                return (
-                    false,
-                    null,
-                    "Invalid due date. Example: 20 August 2026 8:00 AM"
-                );
-            }
-
-            dueDateUtc = parsedDate;
-        }
-
-        // ============================================================
-        // CREATE ASSIGNMENT
-        // ============================================================
-
-        var assignment = new Assignment
-        {
-            Id = Guid.NewGuid(),
-
-            SchoolId = schoolId,
-            TeacherId = teacher.Id,
-
-            ClassId = request.ClassId,
-            SubjectId = request.SubjectId,
-
-            Title = request.Title.Trim(),
-            Description = request.Description,
-            AttachmentUrl = request.AttachmentUrl,
-
-            Session = period.Session,
-            Term = period.CurrentTerm,
-
-            AssignedAt = DateTime.UtcNow,
-            DueDate = dueDateUtc,
-
-            IsPublished = true,
-
-            CreatedAt = DateTime.UtcNow
-        };
-
-        _context.Assignments.Add(assignment);
-
-        await _context.SaveChangesAsync();
-
-        // ============================================================
-        // RESPONSE
-        // ============================================================
-
         return (
-            true,
-            new
-            {
-                assignmentId = assignment.Id,
-
-                schoolId = assignment.SchoolId,
-                teacherId = assignment.TeacherId,
-
-                classId = assignment.ClassId,
-                subjectId = assignment.SubjectId,
-
-                title = assignment.Title,
-                description = assignment.Description,
-                attachmentUrl = assignment.AttachmentUrl,
-
-                session = assignment.Session,
-                term = assignment.Term,
-
-                assignedAt = assignment.AssignedAt,
-                dueDate = assignment.DueDate,
-
-                isPublished = assignment.IsPublished
-            },
-            null
+            false,
+            null,
+            "Teacher profile not found."
         );
     }
+
+    var schoolId = teacher.SchoolId;
+
+    // ============================================================
+    // CURRENT ACADEMIC SESSION + CURRENT TERM
+    // ============================================================
+
+    var period = await _context.AcademicSessions
+        .AsNoTracking()
+        .Where(x =>
+            x.SchoolId == schoolId &&
+            x.IsCurrent)
+        .Select(x => new
+        {
+            x.Session,
+
+            CurrentTerm = x.Terms
+                .Where(t => t.IsCurrent)
+                .Select(t => t.Term)
+                .FirstOrDefault()
+        })
+        .FirstOrDefaultAsync();
+
+    if (period == null)
+    {
+        return (
+            false,
+            null,
+            "There is no active academic session."
+        );
+    }
+
+    if (string.IsNullOrWhiteSpace(period.CurrentTerm))
+    {
+        return (
+            false,
+            null,
+            "There is no active academic term."
+        );
+    }
+
+    // ============================================================
+    // VALIDATE CLASS + SUBJECT + TEACHER ASSIGNMENT
+    //
+    // TeacherSubject contains:
+    // TeacherId
+    // SubjectId
+    // ClassId
+    //
+    // Therefore this is the correct relationship to validate.
+    // ============================================================
+
+    var teacherSubject = await _context.TeacherSubjects
+        .AsNoTracking()
+        .Where(x =>
+            x.TeacherId == teacher.Id &&
+            x.SubjectId == request.SubjectId &&
+            x.ClassId == request.ClassId &&
+            x.SchoolId == schoolId)
+        .Select(x => new
+        {
+            x.Id,
+            x.TeacherId,
+            x.SubjectId,
+            x.ClassId,
+            x.SchoolId,
+
+            SubjectName = x.Subject.Name,
+            ClassName = x.Class.Name
+        })
+        .FirstOrDefaultAsync();
+
+    if (teacherSubject == null)
+    {
+        return (
+            false,
+            null,
+            "You are not assigned to teach this subject for this class."
+        );
+    }
+
+    // ============================================================
+    // VALIDATE TITLE
+    // ============================================================
+
+    if (string.IsNullOrWhiteSpace(request.Title))
+    {
+        return (
+            false,
+            null,
+            "Assignment title is required."
+        );
+    }
+
+    // ============================================================
+    // NORMALIZE DUE DATE
+    // ============================================================
+
+    DateTime? dueDateUtc = null;
+
+    if (!string.IsNullOrWhiteSpace(request.DueDate))
+    {
+        if (!DateTime.TryParse(
+            request.DueDate,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal |
+            DateTimeStyles.AdjustToUniversal,
+            out var parsedDate))
+        {
+            return (
+                false,
+                null,
+                "Invalid due date. Example: 20 August 2026 8:00 AM"
+            );
+        }
+
+        dueDateUtc = parsedDate;
+    }
+
+    // ============================================================
+    // CREATE ASSIGNMENT
+    // ============================================================
+
+    var assignment = new Assignment
+    {
+        Id = Guid.NewGuid(),
+
+        SchoolId = schoolId,
+        TeacherId = teacher.Id,
+
+        ClassId = request.ClassId,
+        SubjectId = request.SubjectId,
+
+        Title = request.Title.Trim(),
+        Description = request.Description,
+        AttachmentUrl = request.AttachmentUrl,
+
+        Session = period.Session,
+        Term = period.CurrentTerm,
+
+        AssignedAt = DateTime.UtcNow,
+        DueDate = dueDateUtc,
+
+        IsPublished = true,
+
+        CreatedAt = DateTime.UtcNow
+    };
+
+    _context.Assignments.Add(assignment);
+
+    await _context.SaveChangesAsync();
+
+    // ============================================================
+    // RESPONSE
+    // ============================================================
+
+    return (
+        true,
+        new
+        {
+            assignmentId = assignment.Id,
+
+            schoolId = assignment.SchoolId,
+            teacherId = assignment.TeacherId,
+
+            classId = assignment.ClassId,
+            className = teacherSubject.ClassName,
+
+            subjectId = assignment.SubjectId,
+            subjectName = teacherSubject.SubjectName,
+
+            title = assignment.Title,
+            description = assignment.Description,
+            attachmentUrl = assignment.AttachmentUrl,
+
+            session = assignment.Session,
+            term = assignment.Term,
+
+            assignedAt = assignment.AssignedAt,
+            dueDate = assignment.DueDate,
+
+            isPublished = assignment.IsPublished
+        },
+        null
+    );
+}
+
 
 
 
