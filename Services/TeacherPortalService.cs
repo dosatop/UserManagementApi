@@ -109,8 +109,51 @@ public class TeacherPortalService(
     // TEACHER SUBJECTS
     // ================================================================
 
-   public async Task<(bool Success, object? Data, string? Error)>
-    GetSubjectsAsync(string userId)
+    public async Task<(bool Success, object? Data, string? Error)>
+     GetSubjectsAsync(string userId)
+    {
+        var teacher = await _context.Teachers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.UserId == userId);
+
+        if (teacher == null)
+        {
+            return (
+                false,
+                null,
+                "Teacher profile not found."
+            );
+        }
+
+        var teacherSubjects = await _context.TeacherSubjects
+            .AsNoTracking()
+            .Where(x => x.TeacherId == teacher.Id)
+            .Select(x => new
+            {
+                subjectId = x.SubjectId,
+                subjectName = x.Subject.Name,
+                code = x.Subject.Code,
+
+                classId = x.ClassId,
+                className = x.Class.Name,
+
+                schoolId = x.SchoolId
+            })
+            .ToListAsync();
+
+        return (
+            true,
+            teacherSubjects,
+            null
+        );
+    }
+
+
+    public async Task<(bool Success, object? Data, string? Error)>
+    GetStudentsBySubjectAsync(
+        string userId,
+        Guid classId,
+        Guid subjectId)
 {
     var teacher = await _context.Teachers
         .AsNoTracking()
@@ -125,30 +168,66 @@ public class TeacherPortalService(
         );
     }
 
-    var teacherSubjects = await _context.TeacherSubjects
+    var assignment = await _context.TeacherSubjects
         .AsNoTracking()
-        .Where(x => x.TeacherId == teacher.Id)
+        .Where(x =>
+            x.TeacherId == teacher.Id &&
+            x.SubjectId == subjectId &&
+            x.ClassId == classId &&
+            x.SchoolId == teacher.SchoolId)
         .Select(x => new
         {
             subjectId = x.SubjectId,
             subjectName = x.Subject.Name,
-            code = x.Subject.Code,
+            subjectCode = x.Subject.Code,
 
             classId = x.ClassId,
-            className = x.Class.Name,
-
-            schoolId = x.SchoolId
+            className = x.Class.Name
         })
+        .FirstOrDefaultAsync();
+
+    if (assignment == null)
+    {
+        return (
+            false,
+            null,
+            "You are not assigned to teach this subject in this class."
+        );
+    }
+
+    var students = await _context.StudentProfiles
+        .AsNoTracking()
+        .Where(x =>
+            x.SchoolId == teacher.SchoolId &&
+            x.ClassId == classId)
+        .Select(x => new
+        {
+            studentId = x.Id,
+            studentName = x.User.FullName,
+            studentNumber = x.StudentNumber,
+            email = x.User.Email,
+            phoneNumber = x.User.PhoneNumber
+        })
+        .OrderBy(x => x.studentName)
         .ToListAsync();
 
     return (
         true,
-        teacherSubjects,
+        new
+        {
+            assignment.subjectId,
+            assignment.subjectName,
+            assignment.subjectCode,
+
+            assignment.classId,
+            assignment.className,
+
+            studentCount = students.Count,
+            students
+        },
         null
     );
 }
-
-
 
     // ================================================================
     // GET TEACHER RESULTS
