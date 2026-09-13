@@ -27,10 +27,9 @@ public interface ITeacherPortalService
         GetSubjectsAsync(string userId);
 
     Task<(bool Success, object? Data, string? Error)>
-    GetStudentsBySubjectAsync(
-    string userId,
-    Guid classId,
-    Guid subjectId);
+GetStudentsAsync(
+string userId,
+Guid? classId = null);
 
     // ================================================================
     // ASSIGNMENTS

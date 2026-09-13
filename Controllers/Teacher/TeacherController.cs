@@ -130,9 +130,8 @@ public class TeacherController(
     }
 
     [HttpGet("students")]
-    public async Task<IActionResult> GetStudentsBySubject(
-[FromQuery] Guid classId,
-[FromQuery] Guid subjectId)
+    public async Task<IActionResult> GetStudents(
+ [FromQuery] Guid? classId = null)
     {
         var userId = GetUserId();
 
@@ -144,26 +143,9 @@ public class TeacherController(
             });
         }
 
-        if (classId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "Class ID is required."
-            });
-        }
-
-        if (subjectId == Guid.Empty)
-        {
-            return BadRequest(new
-            {
-                message = "Subject ID is required."
-            });
-        }
-
-        var result = await _teacherService.GetStudentsBySubjectAsync(
+        var result = await _teacherService.GetStudentsAsync(
             userId,
-            classId,
-            subjectId);
+            classId);
 
         if (!result.Success)
         {
