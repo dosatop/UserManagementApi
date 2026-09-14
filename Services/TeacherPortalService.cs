@@ -5005,318 +5005,323 @@ public class TeacherPortalService(
     CreateBulkAttendanceAsync(
         string userId,
         CreateBulkAttendanceRequest request)
-{
-    // ============================================================
-    // VALIDATE REQUEST
-    // ============================================================
-
-    if (request.Students == null || request.Students.Count == 0)
     {
-        return (
-            false,
-            null,
-            "No students were supplied for attendance."
-        );
-    }
+        // ============================================================
+        // VALIDATE REQUEST
+        // ============================================================
 
-    // Prevent the same student appearing twice in the request.
-    var duplicateStudents = request.Students
-        .GroupBy(x => x.StudentId)
-        .Where(x => x.Count() > 1)
-        .Select(x => x.Key)
-        .ToList();
-
-    if (duplicateStudents.Count > 0)
-    {
-        return (
-            false,
-            null,
-            "The attendance request contains duplicate students."
-        );
-    }
-
-    // ============================================================
-    // TEACHER
-    // ============================================================
-
-    var teacher = await _context.Teachers
-        .AsNoTracking()
-        .FirstOrDefaultAsync(x =>
-            x.UserId == userId);
-
-    if (teacher == null)
-    {
-        return (
-            false,
-            null,
-            "Teacher profile not found."
-        );
-    }
-
-    var schoolId = teacher.SchoolId;
-
-    // ============================================================
-    // CURRENT ACADEMIC SESSION
-    // ============================================================
-
-    var period = await _context.AcademicSessions
-        .AsNoTracking()
-        .FirstOrDefaultAsync(x =>
-            x.SchoolId == schoolId &&
-            x.IsCurrent);
-
-    if (period == null)
-    {
-        return (
-            false,
-            null,
-            "There is no active academic session."
-        );
-    }
-
-    // ============================================================
-    // CURRENT ACADEMIC TERM
-    // ============================================================
-
-    var currentTerm = await _context.AcademicTerms
-        .AsNoTracking()
-        .FirstOrDefaultAsync(x =>
-            x.AcademicSessionId == period.Id &&
-            x.IsCurrent);
-
-    if (currentTerm == null)
-    {
-        return (
-            false,
-            null,
-            "There is no active academic term."
-        );
-    }
-
-    // ============================================================
-    // CLASS TEACHER AUTHORIZATION
-    // ============================================================
-    //
-    // IMPORTANT:
-    // This should check your actual class-teacher relationship.
-    //
-    // If your Class entity has TeacherId / ClassTeacherId,
-    // use that here.
-    //
-    // Example:
-    //
-
-   var isClassTeacher = await _context.TeacherClasses
-    .AsNoTracking()
-    .AnyAsync(x =>
-        x.TeacherId == teacher.Id &&
-        x.ClassId == request.ClassId &&
-        x.Class.SchoolId == schoolId);
-
-    if (!isClassTeacher)
-    {
-        return (
-            false,
-            null,
-            "Only the class teacher can mark attendance for the whole class."
-        );
-    }
-
-    // ============================================================
-    // CLASS
-    // ============================================================
-
-    var classExists = await _context.Classes
-        .AsNoTracking()
-        .AnyAsync(x =>
-            x.Id == request.ClassId &&
-            x.SchoolId == schoolId);
-
-    if (!classExists)
-    {
-        return (
-            false,
-            null,
-            "Class not found."
-        );
-    }
-
-    // ============================================================
-    // DATE
-    // ============================================================
-
-    var date = request.AttendanceDate.Date;
-
-    // ============================================================
-    // STUDENTS
-    // ============================================================
-
-    var studentIds = request.Students
-        .Select(x => x.StudentId)
-        .ToList();
-
-    var students = await _context.StudentProfiles
-        .AsNoTracking()
-        .Where(x =>
-            studentIds.Contains(x.Id) &&
-            x.SchoolId == schoolId &&
-            x.ClassId == request.ClassId)
-        .Select(x => new
+        if (request.Students == null || request.Students.Count == 0)
         {
-            x.Id,
-            x.StudentNumber,
-            StudentName = x.User.FullName
-        })
-        .ToListAsync();
+            return (
+                false,
+                null,
+                "No students were supplied for attendance."
+            );
+        }
 
-    // ============================================================
-    // MAKE SURE ALL STUDENTS BELONG TO CLASS
-    // ============================================================
+        // Prevent the same student appearing twice in the request.
+        var duplicateStudents = request.Students
+            .GroupBy(x => x.StudentId)
+            .Where(x => x.Count() > 1)
+            .Select(x => x.Key)
+            .ToList();
 
-    if (students.Count != studentIds.Count)
-    {
-        var foundIds = students
-            .Select(x => x.Id)
-            .ToHashSet();
+        if (duplicateStudents.Count > 0)
+        {
+            return (
+                false,
+                null,
+                "The attendance request contains duplicate students."
+            );
+        }
 
-        var invalidStudents = studentIds
-            .Where(x => !foundIds.Contains(x))
+        // ============================================================
+        // TEACHER
+        // ============================================================
+
+        var teacher = await _context.Teachers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.UserId == userId);
+
+        if (teacher == null)
+        {
+            return (
+                false,
+                null,
+                "Teacher profile not found."
+            );
+        }
+
+        var schoolId = teacher.SchoolId;
+
+        // ============================================================
+        // CURRENT ACADEMIC SESSION
+        // ============================================================
+
+        var period = await _context.AcademicSessions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.SchoolId == schoolId &&
+                x.IsCurrent);
+
+        if (period == null)
+        {
+            return (
+                false,
+                null,
+                "There is no active academic session."
+            );
+        }
+
+        // ============================================================
+        // CURRENT ACADEMIC TERM
+        // ============================================================
+
+        var currentTerm = await _context.AcademicTerms
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.AcademicSessionId == period.Id &&
+                x.IsCurrent);
+
+        if (currentTerm == null)
+        {
+            return (
+                false,
+                null,
+                "There is no active academic term."
+            );
+        }
+
+        // ============================================================
+        // CLASS TEACHER AUTHORIZATION
+        // ============================================================
+        //
+        // IMPORTANT:
+        // This should check your actual class-teacher relationship.
+        //
+        // If your Class entity has TeacherId / ClassTeacherId,
+        // use that here.
+        //
+        // Example:
+        //
+
+        var isClassTeacher = await _context.TeacherClasses
+         .AsNoTracking()
+         .AnyAsync(x =>
+             x.TeacherId == teacher.Id &&
+             x.ClassId == request.ClassId &&
+             x.Class.SchoolId == schoolId);
+
+        if (!isClassTeacher)
+        {
+            return (
+                false,
+                null,
+                "Only the class teacher can mark attendance for the whole class."
+            );
+        }
+
+        // ============================================================
+        // CLASS
+        // ============================================================
+
+        var classExists = await _context.Classes
+            .AsNoTracking()
+            .AnyAsync(x =>
+                x.Id == request.ClassId &&
+                x.SchoolId == schoolId);
+
+        if (!classExists)
+        {
+            return (
+                false,
+                null,
+                "Class not found."
+            );
+        }
+
+        // ============================================================
+        // DATE
+        // ============================================================
+
+        var date = DateTime.SpecifyKind(
+        request.AttendanceDate.Date,
+        DateTimeKind.Utc
+    );
+
+
+        // ============================================================
+        // STUDENTS
+        // ============================================================
+
+        var studentIds = request.Students
+            .Select(x => x.StudentId)
+            .ToList();
+
+        var students = await _context.StudentProfiles
+            .AsNoTracking()
+            .Where(x =>
+                studentIds.Contains(x.Id) &&
+                x.SchoolId == schoolId &&
+                x.ClassId == request.ClassId)
+            .Select(x => new
+            {
+                x.Id,
+                x.StudentNumber,
+                StudentName = x.User.FullName
+            })
+            .ToListAsync();
+
+        // ============================================================
+        // MAKE SURE ALL STUDENTS BELONG TO CLASS
+        // ============================================================
+
+        if (students.Count != studentIds.Count)
+        {
+            var foundIds = students
+                .Select(x => x.Id)
+                .ToHashSet();
+
+            var invalidStudents = studentIds
+                .Where(x => !foundIds.Contains(x))
+                .ToList();
+
+            return (
+                false,
+                null,
+                "One or more students do not belong to this class."
+            );
+        }
+
+        // ============================================================
+        // CHECK EXISTING ATTENDANCE
+        // ============================================================
+
+        var existingAttendance = await _context.AttendanceRecords
+            .Where(x =>
+                x.ClassId == request.ClassId &&
+                x.SubjectId == null &&
+                x.AttendanceDate.Date == date.Date &&
+                x.Session == period.Session &&
+                x.Term == currentTerm.Term &&
+                studentIds.Contains(x.StudentId))
+            .Select(x => x.StudentId)
+            .ToListAsync();
+
+
+        if (existingAttendance.Count > 0)
+        {
+            return (
+                false,
+                null,
+                "Attendance has already been recorded for one or more students on this date."
+            );
+        }
+
+        // ============================================================
+        // CREATE ATTENDANCE
+        // ============================================================
+
+        var attendanceRecords = new List<AttendanceRecord>();
+
+        foreach (var item in request.Students)
+        {
+            var attendance = new AttendanceRecord
+            {
+                Id = Guid.NewGuid(),
+
+                SchoolId = schoolId,
+
+                StudentId = item.StudentId,
+
+                ClassId = request.ClassId,
+
+                TeacherId = teacher.Id,
+
+                // NULL because this is class attendance.
+                SubjectId = null,
+
+                AttendanceDate = date,
+
+                Status = item.Status,
+
+                Remarks = item.Remarks,
+
+                Session = period.Session,
+
+                Term = currentTerm.Term,
+
+                CreatedAt = DateTime.UtcNow
+            };
+
+            attendanceRecords.Add(attendance);
+        }
+
+        _context.AttendanceRecords.AddRange(attendanceRecords);
+
+        await _context.SaveChangesAsync();
+
+        // ============================================================
+        // RESPONSE
+        // ============================================================
+
+        var result = attendanceRecords
+            .Select(attendance =>
+            {
+                var student = students
+                    .First(x => x.Id == attendance.StudentId);
+
+                return new
+                {
+                    attendanceId = attendance.Id,
+
+                    studentId = student.Id,
+
+                    studentName = student.StudentName,
+
+                    studentNumber = student.StudentNumber,
+
+                    attendance.ClassId,
+
+                    attendance.SubjectId,
+
+                    attendance.AttendanceDate,
+
+                    status = attendance.Status.ToString(),
+
+                    attendance.Remarks,
+
+                    attendance.Session,
+
+                    attendance.Term,
+
+                    attendance.TeacherId,
+
+                    attendance.CreatedAt
+                };
+            })
             .ToList();
 
         return (
-            false,
-            null,
-            "One or more students do not belong to this class."
-        );
-    }
-
-    // ============================================================
-    // CHECK EXISTING ATTENDANCE
-    // ============================================================
-
-    var existingAttendance = await _context.AttendanceRecords
-        .Where(x =>
-            x.ClassId == request.ClassId &&
-            x.SubjectId == null &&
-            x.AttendanceDate.Date == date &&
-            x.Session == period.Session &&
-            x.Term == currentTerm.Term &&
-            studentIds.Contains(x.StudentId))
-        .Select(x => x.StudentId)
-        .ToListAsync();
-
-    if (existingAttendance.Count > 0)
-    {
-        return (
-            false,
-            null,
-            "Attendance has already been recorded for one or more students on this date."
-        );
-    }
-
-    // ============================================================
-    // CREATE ATTENDANCE
-    // ============================================================
-
-    var attendanceRecords = new List<AttendanceRecord>();
-
-    foreach (var item in request.Students)
-    {
-        var attendance = new AttendanceRecord
-        {
-            Id = Guid.NewGuid(),
-
-            SchoolId = schoolId,
-
-            StudentId = item.StudentId,
-
-            ClassId = request.ClassId,
-
-            TeacherId = teacher.Id,
-
-            // NULL because this is class attendance.
-            SubjectId = null,
-
-            AttendanceDate = date,
-
-            Status = item.Status,
-
-            Remarks = item.Remarks,
-
-            Session = period.Session,
-
-            Term = currentTerm.Term,
-
-            CreatedAt = DateTime.UtcNow
-        };
-
-        attendanceRecords.Add(attendance);
-    }
-
-    _context.AttendanceRecords.AddRange(attendanceRecords);
-
-    await _context.SaveChangesAsync();
-
-    // ============================================================
-    // RESPONSE
-    // ============================================================
-
-    var result = attendanceRecords
-        .Select(attendance =>
-        {
-            var student = students
-                .First(x => x.Id == attendance.StudentId);
-
-            return new
+            true,
+            new
             {
-                attendanceId = attendance.Id,
+                classId = request.ClassId,
 
-                studentId = student.Id,
+                attendanceDate = date,
 
-                studentName = student.StudentName,
+                session = period.Session,
 
-                studentNumber = student.StudentNumber,
+                term = currentTerm.Term,
 
-                attendance.ClassId,
+                total = result.Count,
 
-                attendance.SubjectId,
-
-                attendance.AttendanceDate,
-
-                status = attendance.Status.ToString(),
-
-                attendance.Remarks,
-
-                attendance.Session,
-
-                attendance.Term,
-
-                attendance.TeacherId,
-
-                attendance.CreatedAt
-            };
-        })
-        .ToList();
-
-    return (
-        true,
-        new
-        {
-            classId = request.ClassId,
-
-            attendanceDate = date,
-
-            session = period.Session,
-
-            term = currentTerm.Term,
-
-            total = result.Count,
-
-            records = result
-        },
-        null
-    );
-}
+                records = result
+            },
+            null
+        );
+    }
 
 
     // ================================================================

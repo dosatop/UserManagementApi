@@ -792,8 +792,10 @@ public class TeacherController(
     // ============================================================
 
     [HttpPost("bulk-attendance")]
-    public async Task<IActionResult> CreateBulkAttendance(
-        [FromBody] CreateBulkAttendanceRequest request)
+public async Task<IActionResult> CreateBulkAttendance(
+    [FromBody] CreateBulkAttendanceRequest request)
+{
+    try
     {
         var userId = GetUserId();
 
@@ -805,11 +807,10 @@ public class TeacherController(
             });
         }
 
-
-        var result =
-            await _teacherService.CreateBulkAttendanceAsync(
-                userId,
-                request);
+        var result = await _teacherService.CreateBulkAttendanceAsync(
+            userId,
+            request
+        );
 
         if (!result.Success)
         {
@@ -826,6 +827,20 @@ public class TeacherController(
             data = result.Data
         });
     }
+    catch (Exception ex)
+    {
+        Console.WriteLine("BULK ATTENDANCE ERROR:");
+        Console.WriteLine(ex.ToString());
+
+        return StatusCode(500, new
+        {
+            success = false,
+            message = ex.Message,
+            detail = ex.InnerException?.Message
+        });
+    }
+}
+
 
 
 
