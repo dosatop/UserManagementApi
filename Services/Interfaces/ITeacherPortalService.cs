@@ -31,6 +31,12 @@ GetStudentsAsync(
 string userId,
 Guid? classId = null);
 
+Task<(bool Success, object? Data, string? Error)>
+    GetStudentDetailsAsync(
+        string userId,
+        Guid studentId);
+
+
     // ================================================================
     // ASSIGNMENTS
     // ================================================================

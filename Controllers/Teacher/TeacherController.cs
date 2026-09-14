@@ -159,6 +159,38 @@ public class TeacherController(
 
     }
 
+    [HttpGet("students/{studentId:guid}")]
+    public async Task<IActionResult> GetStudentDetails(
+    Guid studentId)
+    {
+        var userId = User.FindFirstValue(
+            ClaimTypes.NameIdentifier);
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Unauthorized(new
+            {
+                message = "User not authenticated."
+            });
+        }
+
+        var result =
+            await _teacherService.GetStudentDetailsAsync(
+                userId,
+                studentId);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Error
+            });
+        }
+
+        return Ok(result.Data);
+    }
+
+
     // ============================================================
     // GET RESULTS
     // ============================================================

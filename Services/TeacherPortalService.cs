@@ -4,6 +4,7 @@ using UserManagementApi.Data;
 using UserManagementApi.DTOs.Results;
 using UserManagementApi.DTOs.TeacherPortal;
 using UserManagementApi.Models;
+using UserManagementApi.Models.Attendance;
 using UserManagementApi.Services.Interfaces;
 
 namespace UserManagementApi.Services;
@@ -257,7 +258,267 @@ public class TeacherPortalService(
         );
 
     }
-    
+
+    public async Task<(bool Success, object? Data, string? Error)>
+    GetStudentDetailsAsync(
+        string userId,
+        Guid studentId)
+    {
+        // ============================================================
+        // GET TEACHER
+        // ============================================================
+
+        var teacher = await _context.Teachers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.UserId == userId);
+
+        if (teacher == null)
+        {
+            return (
+                false,
+                null,
+                "Teacher profile not found."
+            );
+        }
+
+        // ============================================================
+        // GET STUDENT
+        // ============================================================
+
+        var student = await _context.StudentProfiles
+            .AsNoTracking()
+            .Where(x =>
+                x.Id == studentId &&
+                x.SchoolId == teacher.SchoolId)
+            .Select(x => new
+            {
+                studentId = x.Id,
+                studentName = x.User.FullName,
+                studentNumber = x.StudentNumber,
+
+                email = x.User.Email,
+                phoneNumber = x.User.PhoneNumber,
+
+                classId = x.ClassId,
+                className = x.Class.Name,
+
+                schoolId = x.SchoolId
+            })
+            .FirstOrDefaultAsync();
+
+        if (student == null)
+        {
+            return (
+                false,
+                null,
+                "Student not found."
+            );
+        }
+
+        // ============================================================
+        // VERIFY TEACHER TEACHES STUDENT'S CLASS
+        // ============================================================
+
+        var teacherClassSubjects = await _context.TeacherSubjects
+            .AsNoTracking()
+            .Where(x =>
+                x.TeacherId == teacher.Id &&
+                x.SchoolId == teacher.SchoolId &&
+                x.ClassId == student.classId)
+            .Select(x => new
+            {
+                x.SubjectId,
+                subjectName = x.Subject.Name
+            })
+            .Distinct()
+            .ToListAsync();
+
+        if (teacherClassSubjects.Count == 0)
+        {
+            return (
+                false,
+                null,
+                "You are not assigned to teach this student's class."
+            );
+        }
+
+        var teacherSubjectIds = teacherClassSubjects
+            .Select(x => x.SubjectId)
+            .ToList();
+
+        // ============================================================
+        // RESULTS
+        // ============================================================
+
+        var results = await _context.StudentResults
+         .AsNoTracking()
+         .Where(result =>
+             result.StudentId == studentId &&
+             result.SchoolId == teacher.SchoolId
+         )
+         .Select(result => new
+         {
+             ResultId = result.Id,
+             SubjectId = result.SubjectId,
+             SubjectName = result.Subject.Name,
+             Session = result.Session,
+             Term = result.Term,
+             Score = result.Score,
+             TestScore = result.TestScore,
+             ExamScore = result.ExamScore,
+             Grade = result.Grade,
+             GradeRemark = result.GradeRemark,
+             Remark = result.Remark,
+             CreatedAt = result.CreatedAt
+         })
+         .OrderByDescending(x => x.CreatedAt)
+         .ToListAsync();
+
+
+        // ============================================================
+        // ATTENDANCE
+        // ============================================================
+
+        var attendance = await _context.AttendanceRecords
+            .AsNoTracking()
+            .Where(record =>
+                record.StudentId == studentId &&
+                record.SchoolId == teacher.SchoolId &&
+                record.ClassId == student.classId &&
+
+                // Attendance belongs to this teacher
+                record.TeacherId == teacher.Id &&
+
+                // Either:
+                // 1. General class attendance
+                // 2. Subject-specific attendance for a subject
+                //    taught by this teacher
+                (
+                    record.SubjectId == null ||
+                    teacherSubjectIds.Contains(
+                        record.SubjectId.Value)
+                ))
+            .Select(record => new
+            {
+                attendanceId = record.Id,
+
+                subjectId = record.SubjectId,
+
+                subjectName = record.SubjectId != null
+                    ? record.Subject!.Name
+                    : null,
+
+                attendanceDate = record.AttendanceDate,
+
+                status = record.Status,
+
+                remarks = record.Remarks,
+
+                session = record.Session,
+                term = record.Term
+            })
+            .OrderByDescending(x => x.attendanceDate)
+            .ToListAsync();
+
+        // ============================================================
+        // ATTENDANCE SUMMARY
+        // ============================================================
+
+        var totalAttendance = attendance.Count;
+
+        var presentCount = attendance.Count(x =>
+            x.status == AttendanceStatus.Present);
+
+        var absentCount = attendance.Count(x =>
+            x.status == AttendanceStatus.Absent);
+
+        var lateCount = attendance.Count(x =>
+            x.status == AttendanceStatus.Late);
+
+        var excusedCount = attendance.Count(x =>
+            x.status == AttendanceStatus.Excused);
+
+        var holidayCount = attendance.Count(x =>
+            x.status == AttendanceStatus.Holiday);
+
+        var attendancePercentage =
+            totalAttendance == 0
+                ? 0
+                : Math.Round(
+                    (double)presentCount /
+                    totalAttendance *
+                    100,
+                    2);
+
+
+        // ============================================================
+        // ASSIGNMENTS
+        // ============================================================
+
+        var assignments = await _context.Assignments
+            .AsNoTracking()
+            .Where(assignment =>
+                assignment.ClassId == student.classId &&
+                assignment.SchoolId == teacher.SchoolId &&
+                teacherSubjectIds.Contains(
+                    assignment.SubjectId))
+            .Select(assignment => new
+            {
+                assignmentId = assignment.Id,
+
+                subjectId = assignment.SubjectId,
+                subjectName = assignment.Subject.Name,
+
+                title = assignment.Title,
+
+                description = assignment.Description,
+
+                attachmentUrl = assignment.AttachmentUrl,
+
+                dueDate = assignment.DueDate,
+
+                isPublished = assignment.IsPublished,
+
+                createdAt = assignment.CreatedAt
+            })
+            .OrderByDescending(x => x.createdAt)
+            .ToListAsync();
+
+        // ============================================================
+        // RESULT
+        // ============================================================
+
+        return (
+            true,
+
+            new
+            {
+                student,
+
+                teacherSubjects = teacherClassSubjects,
+
+                results,
+
+                attendance = new
+                {
+                    total = totalAttendance,
+                    present = presentCount,
+                    absent = absentCount,
+                    late = lateCount,
+                    percentage = attendancePercentage,
+
+                    records = attendance
+                },
+
+                assignments
+            },
+
+            null
+        );
+    }
+
+
 
     // ================================================================
     // GET TEACHER RESULTS
@@ -3689,217 +3950,217 @@ public class TeacherPortalService(
         );
     }
 
-   public async Task<(
-    bool Success,
-    object? Data,
-    string? Error
-)> CreateAssignmentAsync(
-    string userId,
-    CreateAssignmentRequest request)
-{
-    // ============================================================
-    // GET TEACHER
-    // ============================================================
-
-    var teacher = await _context.Teachers
-        .AsNoTracking()
-        .FirstOrDefaultAsync(x =>
-            x.UserId == userId);
-
-    if (teacher == null)
+    public async Task<(
+     bool Success,
+     object? Data,
+     string? Error
+ )> CreateAssignmentAsync(
+     string userId,
+     CreateAssignmentRequest request)
     {
-        return (
-            false,
-            null,
-            "Teacher profile not found."
-        );
-    }
+        // ============================================================
+        // GET TEACHER
+        // ============================================================
 
-    var schoolId = teacher.SchoolId;
+        var teacher = await _context.Teachers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.UserId == userId);
 
-    // ============================================================
-    // CURRENT ACADEMIC SESSION + CURRENT TERM
-    // ============================================================
-
-    var period = await _context.AcademicSessions
-        .AsNoTracking()
-        .Where(x =>
-            x.SchoolId == schoolId &&
-            x.IsCurrent)
-        .Select(x => new
-        {
-            x.Session,
-
-            CurrentTerm = x.Terms
-                .Where(t => t.IsCurrent)
-                .Select(t => t.Term)
-                .FirstOrDefault()
-        })
-        .FirstOrDefaultAsync();
-
-    if (period == null)
-    {
-        return (
-            false,
-            null,
-            "There is no active academic session."
-        );
-    }
-
-    if (string.IsNullOrWhiteSpace(period.CurrentTerm))
-    {
-        return (
-            false,
-            null,
-            "There is no active academic term."
-        );
-    }
-
-    // ============================================================
-    // VALIDATE CLASS + SUBJECT + TEACHER ASSIGNMENT
-    //
-    // TeacherSubject contains:
-    // TeacherId
-    // SubjectId
-    // ClassId
-    //
-    // Therefore this is the correct relationship to validate.
-    // ============================================================
-
-    var teacherSubject = await _context.TeacherSubjects
-        .AsNoTracking()
-        .Where(x =>
-            x.TeacherId == teacher.Id &&
-            x.SubjectId == request.SubjectId &&
-            x.ClassId == request.ClassId &&
-            x.SchoolId == schoolId)
-        .Select(x => new
-        {
-            x.Id,
-            x.TeacherId,
-            x.SubjectId,
-            x.ClassId,
-            x.SchoolId,
-
-            SubjectName = x.Subject.Name,
-            ClassName = x.Class.Name
-        })
-        .FirstOrDefaultAsync();
-
-    if (teacherSubject == null)
-    {
-        return (
-            false,
-            null,
-            "You are not assigned to teach this subject for this class."
-        );
-    }
-
-    // ============================================================
-    // VALIDATE TITLE
-    // ============================================================
-
-    if (string.IsNullOrWhiteSpace(request.Title))
-    {
-        return (
-            false,
-            null,
-            "Assignment title is required."
-        );
-    }
-
-    // ============================================================
-    // NORMALIZE DUE DATE
-    // ============================================================
-
-    DateTime? dueDateUtc = null;
-
-    if (!string.IsNullOrWhiteSpace(request.DueDate))
-    {
-        if (!DateTime.TryParse(
-            request.DueDate,
-            CultureInfo.InvariantCulture,
-            DateTimeStyles.AssumeUniversal |
-            DateTimeStyles.AdjustToUniversal,
-            out var parsedDate))
+        if (teacher == null)
         {
             return (
                 false,
                 null,
-                "Invalid due date. Example: 20 August 2026 8:00 AM"
+                "Teacher profile not found."
             );
         }
 
-        dueDateUtc = parsedDate;
-    }
+        var schoolId = teacher.SchoolId;
 
-    // ============================================================
-    // CREATE ASSIGNMENT
-    // ============================================================
+        // ============================================================
+        // CURRENT ACADEMIC SESSION + CURRENT TERM
+        // ============================================================
 
-    var assignment = new Assignment
-    {
-        Id = Guid.NewGuid(),
+        var period = await _context.AcademicSessions
+            .AsNoTracking()
+            .Where(x =>
+                x.SchoolId == schoolId &&
+                x.IsCurrent)
+            .Select(x => new
+            {
+                x.Session,
 
-        SchoolId = schoolId,
-        TeacherId = teacher.Id,
+                CurrentTerm = x.Terms
+                    .Where(t => t.IsCurrent)
+                    .Select(t => t.Term)
+                    .FirstOrDefault()
+            })
+            .FirstOrDefaultAsync();
 
-        ClassId = request.ClassId,
-        SubjectId = request.SubjectId,
-
-        Title = request.Title.Trim(),
-        Description = request.Description,
-        AttachmentUrl = request.AttachmentUrl,
-
-        Session = period.Session,
-        Term = period.CurrentTerm,
-
-        AssignedAt = DateTime.UtcNow,
-        DueDate = dueDateUtc,
-
-        IsPublished = true,
-
-        CreatedAt = DateTime.UtcNow
-    };
-
-    _context.Assignments.Add(assignment);
-
-    await _context.SaveChangesAsync();
-
-    // ============================================================
-    // RESPONSE
-    // ============================================================
-
-    return (
-        true,
-        new
+        if (period == null)
         {
-            assignmentId = assignment.Id,
+            return (
+                false,
+                null,
+                "There is no active academic session."
+            );
+        }
 
-            schoolId = assignment.SchoolId,
-            teacherId = assignment.TeacherId,
+        if (string.IsNullOrWhiteSpace(period.CurrentTerm))
+        {
+            return (
+                false,
+                null,
+                "There is no active academic term."
+            );
+        }
 
-            classId = assignment.ClassId,
-            className = teacherSubject.ClassName,
+        // ============================================================
+        // VALIDATE CLASS + SUBJECT + TEACHER ASSIGNMENT
+        //
+        // TeacherSubject contains:
+        // TeacherId
+        // SubjectId
+        // ClassId
+        //
+        // Therefore this is the correct relationship to validate.
+        // ============================================================
 
-            subjectId = assignment.SubjectId,
-            subjectName = teacherSubject.SubjectName,
+        var teacherSubject = await _context.TeacherSubjects
+            .AsNoTracking()
+            .Where(x =>
+                x.TeacherId == teacher.Id &&
+                x.SubjectId == request.SubjectId &&
+                x.ClassId == request.ClassId &&
+                x.SchoolId == schoolId)
+            .Select(x => new
+            {
+                x.Id,
+                x.TeacherId,
+                x.SubjectId,
+                x.ClassId,
+                x.SchoolId,
 
-            title = assignment.Title,
-            description = assignment.Description,
-            attachmentUrl = assignment.AttachmentUrl,
+                SubjectName = x.Subject.Name,
+                ClassName = x.Class.Name
+            })
+            .FirstOrDefaultAsync();
 
-            session = assignment.Session,
-            term = assignment.Term,
+        if (teacherSubject == null)
+        {
+            return (
+                false,
+                null,
+                "You are not assigned to teach this subject for this class."
+            );
+        }
 
-            assignedAt = assignment.AssignedAt,
-            dueDate = assignment.DueDate,
+        // ============================================================
+        // VALIDATE TITLE
+        // ============================================================
 
-            isPublished = assignment.IsPublished
-        },
-        null
-    );
-}
+        if (string.IsNullOrWhiteSpace(request.Title))
+        {
+            return (
+                false,
+                null,
+                "Assignment title is required."
+            );
+        }
+
+        // ============================================================
+        // NORMALIZE DUE DATE
+        // ============================================================
+
+        DateTime? dueDateUtc = null;
+
+        if (!string.IsNullOrWhiteSpace(request.DueDate))
+        {
+            if (!DateTime.TryParse(
+                request.DueDate,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal |
+                DateTimeStyles.AdjustToUniversal,
+                out var parsedDate))
+            {
+                return (
+                    false,
+                    null,
+                    "Invalid due date. Example: 20 August 2026 8:00 AM"
+                );
+            }
+
+            dueDateUtc = parsedDate;
+        }
+
+        // ============================================================
+        // CREATE ASSIGNMENT
+        // ============================================================
+
+        var assignment = new Assignment
+        {
+            Id = Guid.NewGuid(),
+
+            SchoolId = schoolId,
+            TeacherId = teacher.Id,
+
+            ClassId = request.ClassId,
+            SubjectId = request.SubjectId,
+
+            Title = request.Title.Trim(),
+            Description = request.Description,
+            AttachmentUrl = request.AttachmentUrl,
+
+            Session = period.Session,
+            Term = period.CurrentTerm,
+
+            AssignedAt = DateTime.UtcNow,
+            DueDate = dueDateUtc,
+
+            IsPublished = true,
+
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.Assignments.Add(assignment);
+
+        await _context.SaveChangesAsync();
+
+        // ============================================================
+        // RESPONSE
+        // ============================================================
+
+        return (
+            true,
+            new
+            {
+                assignmentId = assignment.Id,
+
+                schoolId = assignment.SchoolId,
+                teacherId = assignment.TeacherId,
+
+                classId = assignment.ClassId,
+                className = teacherSubject.ClassName,
+
+                subjectId = assignment.SubjectId,
+                subjectName = teacherSubject.SubjectName,
+
+                title = assignment.Title,
+                description = assignment.Description,
+                attachmentUrl = assignment.AttachmentUrl,
+
+                session = assignment.Session,
+                term = assignment.Term,
+
+                assignedAt = assignment.AssignedAt,
+                dueDate = assignment.DueDate,
+
+                isPublished = assignment.IsPublished
+            },
+            null
+        );
+    }
 
 
 
