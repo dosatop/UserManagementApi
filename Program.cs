@@ -152,6 +152,15 @@ builder.Services.AddQuartzHostedService(options =>
 {
     options.WaitForJobsToComplete = true;
 });
+builder.Services
+    .AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(
+            new JsonStringEnumConverter()
+        );
+    });
+
 
 builder.Services.Configure<SeedAdminSettings>(
     builder.Configuration.GetSection("SeedAdmin"));
