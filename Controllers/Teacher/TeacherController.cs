@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using UserManagementApi.Data;
+using UserManagementApi.DTOs.Attendance;
 using UserManagementApi.DTOs.Auth.Roles;
 using UserManagementApi.DTOs.Results;
 using UserManagementApi.DTOs.TeacherPortal;
@@ -784,6 +785,48 @@ public class TeacherController(
             message = "Assignment deleted successfully."
         });
     }
+
+
+    // ============================================================
+    // BULK CLASS ATTENDANCE
+    // ============================================================
+
+    [HttpPost("bulk-attendance")]
+    public async Task<IActionResult> CreateBulkAttendance(
+        [FromBody] CreateBulkAttendanceRequest request)
+    {
+        var userId = GetUserId();
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Unauthorized(new
+            {
+                message = "User identity could not be determined."
+            });
+        }
+
+
+        var result =
+            await _teacherService.CreateBulkAttendanceAsync(
+                userId,
+                request);
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = result.Error
+            });
+        }
+
+        return Ok(new
+        {
+            success = true,
+            data = result.Data
+        });
+    }
+
 
 
     // ================================================================

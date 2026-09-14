@@ -1,3 +1,4 @@
+using UserManagementApi.DTOs.Attendance;
 using UserManagementApi.DTOs.Results;
 using UserManagementApi.DTOs.TeacherPortal;
 
@@ -75,6 +76,11 @@ Task<(bool Success, object? Data, string? Error)>
         CreateAttendanceAsync(
             string userId,
             CreateAttendanceRequest request);
+
+            Task<(bool Success, object? Data, string? Error)>
+        CreateBulkAttendanceAsync(
+            string userId,
+            CreateBulkAttendanceRequest request);
 
     Task<(bool Success, object? Data, string? Error)>
         GetAttendanceAsync(
