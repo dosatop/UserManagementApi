@@ -9,16 +9,17 @@ using UserManagementApi.Models.Attendance;
 using UserManagementApi.Services.Interfaces;
 
 namespace UserManagementApi.Services;
-
 public class TeacherPortalService(
-    ApplicationDbContext context) : ITeacherPortalService
+    ApplicationDbContext context,
+    ILogger<TeacherPortalService> logger) : ITeacherPortalService
 {
     private readonly ApplicationDbContext _context = context;
+    private readonly ILogger<TeacherPortalService> _logger = logger;
 
     // ================================================================
     // PROFILE
     // ================================================================
-
+    
     public async Task<(bool Success, object? Data, string? Error)>
         GetProfileAsync(string userId)
     {
@@ -43,6 +44,7 @@ public class TeacherPortalService(
 
         if (teacher == null)
         {
+            _logger.LogWarning("Teacher profile not found for user ID: {UserId}", userId);
             return (
                 false,
                 null,
@@ -4901,15 +4903,20 @@ public class TeacherPortalService(
     // GET ATTENDANCE
     // ================================================================
 
-    public async Task<(bool Success, object? Data, string? Error)>
-        GetAttendanceAsync(
-            string userId,
-            GetTeacherAttendanceRequest request)
+ public async Task<(
+    bool Success,
+    object? Data,
+    string? Error
+)> GetAttendanceAsync(
+    string userId,
+    GetTeacherAttendanceRequest request)
+{
+    try
     {
+        // 1. Find the teacher using the logged-in user's ID
         var teacher = await _context.Teachers
             .AsNoTracking()
-            .FirstOrDefaultAsync(x =>
-                x.UserId == userId);
+            .FirstOrDefaultAsync(x => x.UserId == userId);
 
         if (teacher == null)
         {
@@ -4920,50 +4927,76 @@ public class TeacherPortalService(
             );
         }
 
+        // 2. Get attendance records belonging to this teacher
+        // and the same school
         var query = _context.AttendanceRecords
             .AsNoTracking()
             .Where(x =>
                 x.TeacherId == teacher.Id &&
                 x.SchoolId == teacher.SchoolId);
 
+        // 3. Filter by student
         if (request.StudentId.HasValue)
         {
             query = query.Where(x =>
                 x.StudentId == request.StudentId.Value);
         }
 
+        // 4. Filter by class
         if (request.ClassId.HasValue)
         {
             query = query.Where(x =>
                 x.ClassId == request.ClassId.Value);
         }
 
+        // 5. Filter by subject
+        // Also include class-level records saved without a subject
         if (request.SubjectId.HasValue)
         {
             query = query.Where(x =>
-                x.SubjectId == request.SubjectId.Value);
+                x.SubjectId == request.SubjectId.Value ||
+                x.SubjectId == null);
         }
 
+        // 6. Filter by date using a UTC range
         if (request.Date.HasValue)
         {
-            var date = request.Date.Value.Date;
+            var raw = request.Date.Value;
+
+            // Normalise to UTC so Npgsql accepts it for timestamptz:
+            // - "2026-10-26" / "2026-10-26T00:00:00" -> Unspecified -> treat as UTC
+            // - "2026-10-26T00:00:00Z"                -> already UTC
+            // - "2026-10-26T00:00:00+01:00"           -> Local -> keep the client's calendar day
+            var utc = raw.Kind switch
+            {
+                DateTimeKind.Utc => raw,
+                DateTimeKind.Local => DateTime.SpecifyKind(raw.Date, DateTimeKind.Utc),
+                _ => DateTime.SpecifyKind(raw, DateTimeKind.Utc)
+            };
+
+            var date = DateTime.SpecifyKind(utc.Date, DateTimeKind.Utc);
+            var nextDate = date.AddDays(1);
 
             query = query.Where(x =>
-                x.AttendanceDate.Date == date);
+                x.AttendanceDate >= date &&
+                x.AttendanceDate < nextDate);
         }
 
+        // 7. Filter by academic session
         if (!string.IsNullOrWhiteSpace(request.Session))
         {
             query = query.Where(x =>
                 x.Session == request.Session);
         }
 
+        // 8. Filter by academic term
         if (!string.IsNullOrWhiteSpace(request.Term))
         {
             query = query.Where(x =>
                 x.Term == request.Term);
         }
 
+        // 9. Retrieve and format attendance records
         var records = await query
             .OrderByDescending(x => x.AttendanceDate)
             .ThenBy(x => x.Student.User.FullName)
@@ -4987,19 +5020,36 @@ public class TeacherPortalService(
 
                 status = x.Status.ToString(),
 
-                x.Remarks,
+                remarks = x.Remarks,
 
-                x.Session,
-                x.Term
+                session = x.Session,
+                term = x.Term
             })
             .ToListAsync();
 
+        // 10. Return successful response
         return (
             true,
             records,
             null
         );
     }
+    catch (Exception ex)
+    {
+        // 11. Log the full error for debugging
+        _logger.LogError(
+            ex,
+            "Error retrieving attendance for teacher user {UserId}",
+            userId);
+
+        // 12. Return a failure response
+        return (
+            false,
+            null,
+            "An error occurred while retrieving attendance records."
+        );
+    }
+}
 
     public async Task<(bool Success, object? Data, string? Error)>
     CreateBulkAttendanceAsync(
