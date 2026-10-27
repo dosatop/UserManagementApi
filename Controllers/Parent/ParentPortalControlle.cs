@@ -181,27 +181,20 @@ public class ParentController : ControllerBase
     // ============================================================
     // CHILD RESULTS
     // ============================================================
+    // session/term are optional: leave them out for the school's
+    // current session and term.
 
     [HttpGet("children/{studentId:guid}/results")]
     public async Task<IActionResult> GetChildResults(
         Guid studentId,
-        [FromQuery] string session,
-        [FromQuery] string term)
+        [FromQuery] string? session = null,
+        [FromQuery] string? term = null)
     {
         var userId = GetUserId();
 
         if (string.IsNullOrEmpty(userId))
         {
             return Unauthorized();
-        }
-
-        if (string.IsNullOrWhiteSpace(session) ||
-            string.IsNullOrWhiteSpace(term))
-        {
-            return BadRequest(new
-            {
-                message = "Session and term are required."
-            });
         }
 
         var result =
@@ -225,27 +218,20 @@ public class ParentController : ControllerBase
     // ============================================================
     // CHILD ATTENDANCE
     // ============================================================
+    // session/term are optional: leave them out for the school's
+    // current session and term.
 
     [HttpGet("children/{studentId:guid}/attendance")]
     public async Task<IActionResult> GetChildAttendance(
         Guid studentId,
-        [FromQuery] string session,
-        [FromQuery] string term)
+        [FromQuery] string? session = null,
+        [FromQuery] string? term = null)
     {
         var userId = GetUserId();
 
         if (string.IsNullOrEmpty(userId))
         {
             return Unauthorized();
-        }
-
-        if (string.IsNullOrWhiteSpace(session) ||
-            string.IsNullOrWhiteSpace(term))
-        {
-            return BadRequest(new
-            {
-                message = "Session and term are required."
-            });
         }
 
         var result =
@@ -269,27 +255,20 @@ public class ParentController : ControllerBase
     // ============================================================
     // CHILD ASSIGNMENTS
     // ============================================================
+    // session/term are optional: leave them out for the school's
+    // current session and term.
 
     [HttpGet("children/{studentId:guid}/assignments")]
     public async Task<IActionResult> GetChildAssignments(
         Guid studentId,
-        [FromQuery] string session,
-        [FromQuery] string term)
+        [FromQuery] string? session = null,
+        [FromQuery] string? term = null)
     {
         var userId = GetUserId();
 
         if (string.IsNullOrEmpty(userId))
         {
             return Unauthorized();
-        }
-
-        if (string.IsNullOrWhiteSpace(session) ||
-            string.IsNullOrWhiteSpace(term))
-        {
-            return BadRequest(new
-            {
-                message = "Session and term are required."
-            });
         }
 
         var result =

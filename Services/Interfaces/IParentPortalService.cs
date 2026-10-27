@@ -49,34 +49,14 @@ public interface IParentPortalService
     // CHILD RESULTS
     // ============================================================
 
-    Task<(bool Success, object? Data, string? Error)>
-        GetChildResultsAsync(
-            string userId,
-            Guid studentId,
-            string session,
-            string term);
+    Task<(bool Success, object? Data, string? Error)> GetChildResultsAsync(
+    string userId, Guid studentId, string? session, string? term);
 
-    // ============================================================
-    // CHILD ATTENDANCE
-    // ============================================================
+Task<(bool Success, object? Data, string? Error)> GetChildAttendanceAsync(
+    string userId, Guid studentId, string? session, string? term);
 
-    Task<(bool Success, object? Data, string? Error)>
-        GetChildAttendanceAsync(
-            string userId,
-            Guid studentId,
-            string session,
-            string term);
-
-    // ============================================================
-    // CHILD ASSIGNMENTS
-    // ============================================================
-
-    Task<(bool Success, object? Data, string? Error)>
-        GetChildAssignmentsAsync(
-            string userId,
-            Guid studentId,
-            string session,
-            string term);
+Task<(bool Success, object? Data, string? Error)> GetChildAssignmentsAsync(
+    string userId, Guid studentId, string? session, string? term);
 
     // ============================================================
     // SINGLE CHILD ASSIGNMENT
