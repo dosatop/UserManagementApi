@@ -54,6 +54,46 @@ public class StudentPortalService(ApplicationDbContext context) : IStudentPortal
         );
     }
 
+    
+// ====================================================================
+// 2. StudentPortalService — add this method
+// ====================================================================
+// Same lookup the teacher attendance code uses: the student's school,
+// then its current AcademicSession and current AcademicTerm.
+ 
+public async Task<(string? Session, string? Term)> GetCurrentPeriodAsync(
+    string userId)
+{
+    var schoolId = await _context.StudentProfiles
+        .AsNoTracking()
+        .Where(x => x.UserId == userId)
+        .Select(x => (Guid?)x.SchoolId)
+        .FirstOrDefaultAsync();
+ 
+    if (schoolId == null)
+    {
+        return (null, null);
+    }
+ 
+    var period = await _context.AcademicSessions
+        .AsNoTracking()
+        .FirstOrDefaultAsync(x => x.SchoolId == schoolId && x.IsCurrent);
+ 
+    if (period == null)
+    {
+        return (null, null);
+    }
+ 
+    var term = await _context.AcademicTerms
+        .AsNoTracking()
+        .Where(x => x.AcademicSessionId == period.Id && x.IsCurrent)
+        .Select(x => x.Term)
+        .FirstOrDefaultAsync();
+ 
+    return (period.Session, term);
+}
+ 
+
     // ============================================================
     // CLASS
     // ============================================================

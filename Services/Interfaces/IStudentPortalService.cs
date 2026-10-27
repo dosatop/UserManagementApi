@@ -15,6 +15,7 @@ public interface IStudentPortalService
             string userId,
             string session,
             string term);
+            Task<(string? Session, string? Term)> GetCurrentPeriodAsync(string userId);
 
     // ============================================================
     // ATTENDANCE

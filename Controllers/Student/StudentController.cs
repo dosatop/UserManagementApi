@@ -25,6 +25,46 @@ public class StudentController : ControllerBase
             ClaimTypes.NameIdentifier);
     }
 
+     
+// ====================================================================
+// 3. StudentController — add this helper inside the class
+// ====================================================================
+// Uses the session/term from the query if given, otherwise the
+// school's current ones. Returns an error message if neither exists.
+ 
+private async Task<(string? Session, string? Term, string? Error)>
+    ResolvePeriodAsync(string userId, string? session, string? term)
+{
+    if (!string.IsNullOrWhiteSpace(session) &&
+        !string.IsNullOrWhiteSpace(term))
+    {
+        return (session.Trim(), term.Trim(), null);
+    }
+ 
+    var current = await _studentService.GetCurrentPeriodAsync(userId);
+ 
+    var resolvedSession = string.IsNullOrWhiteSpace(session)
+        ? current.Session
+        : session.Trim();
+ 
+    var resolvedTerm = string.IsNullOrWhiteSpace(term)
+        ? current.Term
+        : term.Trim();
+ 
+    if (string.IsNullOrWhiteSpace(resolvedSession))
+    {
+        return (null, null, "There is no active academic session.");
+    }
+ 
+    if (string.IsNullOrWhiteSpace(resolvedTerm))
+    {
+        return (null, null, "There is no active academic term.");
+    }
+ 
+    return (resolvedSession, resolvedTerm, null);
+}
+ 
+
     [HttpGet("profile")]
     public async Task<IActionResult> GetProfile()
     {
@@ -97,164 +137,121 @@ public class StudentController : ControllerBase
         return Ok(result.Data);
     }
 
-    [HttpGet("results")]
-    public async Task<IActionResult> GetResults(
-    [FromQuery] string session,
-    [FromQuery] string term)
+   // ====================================================================
+// 4. StudentController — replace the three actions below
+// ====================================================================
+ 
+[HttpGet("results")]
+public async Task<IActionResult> GetResults(
+    [FromQuery] string? session,
+    [FromQuery] string? term)
+{
+    var userId = GetUserId();
+ 
+    if (string.IsNullOrEmpty(userId))
     {
-        var userId = GetUserId();
-
-        if (string.IsNullOrEmpty(userId))
-        {
-            return Unauthorized();
-        }
-
-        if (string.IsNullOrWhiteSpace(session) ||
-            string.IsNullOrWhiteSpace(term))
-        {
-            return BadRequest(new
-            {
-                message = "Session and term are required."
-            });
-        }
-
-        var result =
-            await _studentService.GetResultsAsync(
-                userId,
-                session,
-                term);
-
-        if (!result.Success)
-        {
-            return NotFound(new
-            {
-                message = result.Error
-            });
-        }
-
-        return Ok(result.Data);
+        return Unauthorized();
     }
-
-    // ============================================================
-    // ATTENDANCE
-    // ============================================================
-
-    [HttpGet("attendance")]
-    public async Task<IActionResult> GetAttendance(
-        [FromQuery] string session,
-        [FromQuery] string term)
+ 
+    var period = await ResolvePeriodAsync(userId, session, term);
+ 
+    if (period.Error != null)
     {
-        if (string.IsNullOrWhiteSpace(session))
+        return BadRequest(new { message = period.Error });
+    }
+ 
+    var result = await _studentService.GetResultsAsync(
+        userId,
+        period.Session!,
+        period.Term!);
+ 
+    if (!result.Success)
+    {
+        return NotFound(new { message = result.Error });
+    }
+ 
+    return Ok(result.Data);
+}
+ 
+// ============================================================
+// ATTENDANCE
+// ============================================================
+ 
+[HttpGet("attendance")]
+public async Task<IActionResult> GetAttendance(
+    [FromQuery] string? session,
+    [FromQuery] string? term)
+{
+    var userId = GetUserId();
+ 
+    if (string.IsNullOrWhiteSpace(userId))
+    {
+        return Unauthorized(new
         {
-            return BadRequest(new
-            {
-                success = false,
-                message = "Session is required."
-            });
-        }
-
-        if (string.IsNullOrWhiteSpace(term))
-        {
-            return BadRequest(new
-            {
-                success = false,
-                message = "Term is required."
-            });
-        }
-
-        var userId = GetUserId();
-
-        if (string.IsNullOrWhiteSpace(userId))
-        {
-            return Unauthorized(new
-            {
-                success = false,
-                message = "User identity not found."
-            });
-        }
-
-        var result =
-            await _studentService.GetAttendanceAsync(
-                userId,
-                session,
-                term);
-
-        if (!result.Success)
-        {
-            return NotFound(new
-            {
-                success = false,
-                message = result.Error
-            });
-        }
-
-        return Ok(new
-        {
-            success = true,
-            data = result.Data
+            success = false,
+            message = "User identity not found."
         });
     }
-
-    // ============================================================
-    // ASSIGNMENTS
-    // ============================================================
-
-    [HttpGet("assignments")]
-    public async Task<IActionResult> GetAssignments(
-        [FromQuery] string session,
-        [FromQuery] string term)
+ 
+    var period = await ResolvePeriodAsync(userId, session, term);
+ 
+    if (period.Error != null)
     {
-        if (string.IsNullOrWhiteSpace(session))
+        return BadRequest(new { success = false, message = period.Error });
+    }
+ 
+    var result = await _studentService.GetAttendanceAsync(
+        userId,
+        period.Session!,
+        period.Term!);
+ 
+    if (!result.Success)
+    {
+        return NotFound(new { success = false, message = result.Error });
+    }
+ 
+    return Ok(new { success = true, data = result.Data });
+}
+ 
+// ============================================================
+// ASSIGNMENTS
+// ============================================================
+ 
+[HttpGet("assignments")]
+public async Task<IActionResult> GetAssignments(
+    [FromQuery] string? session,
+    [FromQuery] string? term)
+{
+    var userId = GetUserId();
+ 
+    if (string.IsNullOrWhiteSpace(userId))
+    {
+        return Unauthorized(new
         {
-            return BadRequest(new
-            {
-                success = false,
-                message = "Session is required."
-            });
-        }
-
-        if (string.IsNullOrWhiteSpace(term))
-        {
-            return BadRequest(new
-            {
-                success = false,
-                message = "Term is required."
-            });
-        }
-
-        var userId = GetUserId();
-
-        if (string.IsNullOrWhiteSpace(userId))
-        {
-            return Unauthorized(new
-            {
-                success = false,
-                message = "User identity not found."
-            });
-        }
-
-        var result =
-            await _studentService.GetAssignmentsAsync(
-                userId,
-                session,
-                term);
-
-        if (!result.Success)
-        {
-            return NotFound(new
-            {
-                success = false,
-                message = result.Error
-            });
-        }
-
-        return Ok(new
-        {
-            success = true,
-            data = result.Data
+            success = false,
+            message = "User identity not found."
         });
     }
-
+ 
+    var period = await ResolvePeriodAsync(userId, session, term);
+ 
+    if (period.Error != null)
+    {
+        return BadRequest(new { success = false, message = period.Error });
+    }
+ 
+    var result = await _studentService.GetAssignmentsAsync(
+        userId,
+        period.Session!,
+        period.Term!);
+ 
+    if (!result.Success)
+    {
+        return NotFound(new { success = false, message = result.Error });
+    }
+ 
+    return Ok(new { success = true, data = result.Data });
+}
     // ============================================================
     // SINGLE ASSIGNMENT
     // ============================================================
