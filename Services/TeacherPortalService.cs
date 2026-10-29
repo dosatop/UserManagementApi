@@ -2208,25 +2208,25 @@ private async Task<bool> IsClassTeacherAsync(Guid teacherId, Guid classId)
             );
         }
 
-        // ============================================================
-        // TEACHER MUST TEACH CLASS
-        // ============================================================
+        // // ============================================================
+        // // TEACHER MUST TEACH CLASS
+        // // ============================================================
 
-        var teachesClass = await _context.TeacherClasses
-            .AsNoTracking()
-            .AnyAsync(x =>
-                x.TeacherId == teacher.Id &&
-                x.ClassId == request.ClassId &&
-                x.Class.SchoolId == schoolId);
+        // var teachesClass = await _context.TeacherClasses
+        //     .AsNoTracking()
+        //     .AnyAsync(x =>
+        //         x.TeacherId == teacher.Id &&
+        //         x.ClassId == request.ClassId &&
+        //         x.Class.SchoolId == schoolId);
 
-        if (!teachesClass)
-        {
-            return (
-                false,
-                null,
-                "You are not assigned to this class."
-            );
-        }
+        // if (!teachesClass)
+        // {
+        //     return (
+        //         false,
+        //         null,
+        //         "You are not assigned to this class."
+        //     );
+        // }
 
         // ============================================================
         // VALIDATE SUBJECT
