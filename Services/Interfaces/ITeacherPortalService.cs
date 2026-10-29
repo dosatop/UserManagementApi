@@ -123,6 +123,13 @@ public interface ITeacherPortalService
             Guid assignmentId);
 
     Task<(bool Success, object? Data, string? Error)>
+        GradeSubmissionAsync(
+            string userId,
+        Guid assignmentId,
+        Guid submissionId,
+        GradeAssignmentRequest request);
+
+    Task<(bool Success, object? Data, string? Error)>
         UpdateAssignmentAsync(
             string userId,
             Guid assignmentId,

@@ -676,6 +676,44 @@ public class TeacherController(
     }
 
 
+    
+[HttpPut("{assignmentId:guid}/submissions/{submissionId:guid}/grade")]
+public async Task<IActionResult> GradeSubmission(
+    Guid assignmentId,
+    Guid submissionId,
+    [FromBody] GradeAssignmentRequest request)
+{
+    var userId = User.FindFirst(
+        System.Security.Claims.ClaimTypes.NameIdentifier
+    )?.Value;
+
+    if (string.IsNullOrWhiteSpace(userId))
+        return Unauthorized();
+
+    var result = await _teacherService.GradeSubmissionAsync(
+        userId,
+        assignmentId,
+        submissionId,
+        request);
+
+    if (!result.Success)
+    {
+        if (result.Error == "Teacher profile not found.")
+            return NotFound(new { message = result.Error });
+
+        if (result.Error == "Assignment not found.")
+            return NotFound(new { message = result.Error });
+
+        if (result.Error == "Submission not found for this assignment.")
+            return NotFound(new { message = result.Error });
+
+        return BadRequest(new { message = result.Error });
+    }
+
+    return Ok(result.Data);
+}
+
+
     // ================================================================
     // CREATE ASSIGNMENT
     // ================================================================

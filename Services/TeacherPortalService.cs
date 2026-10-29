@@ -4519,6 +4519,74 @@ public async Task<(bool Success, object? Data, string? Error)>
         );
     }
 
+    
+public async Task<(bool Success, object? Data, string? Error)>
+    GradeSubmissionAsync(
+        string userId,
+        Guid assignmentId,
+        Guid submissionId,
+        GradeAssignmentRequest request)
+{
+    var teacher = await _context.Teachers
+        .AsNoTracking()
+        .FirstOrDefaultAsync(x => x.UserId == userId);
+
+    if (teacher == null)
+    {
+        return (false, null, "Teacher profile not found.");
+    }
+
+    var assignment = await _context.Assignments
+        .AsNoTracking()
+        .FirstOrDefaultAsync(x =>
+            x.Id == assignmentId &&
+            x.TeacherId == teacher.Id &&
+            x.SchoolId == teacher.SchoolId);
+
+    if (assignment == null)
+    {
+        return (false, null, "Assignment not found.");
+    }
+
+    if (request.Score < 0 || request.Score > 10)
+    {
+        return (false, null, "Score must be between 0 and 10.");
+    }
+
+    var submission = await _context.AssignmentSubmissions
+        .FirstOrDefaultAsync(x =>
+            x.Id == submissionId &&
+            x.AssignmentId == assignmentId);
+
+    if (submission == null)
+    {
+        return (false, null, "Submission not found for this assignment.");
+    }
+
+    submission.Score = request.Score;
+    submission.Feedback = request.Feedback?.Trim();
+    submission.IsGraded = true;
+    submission.GradedAt = DateTime.UtcNow;
+
+    await _context.SaveChangesAsync();
+
+    return (
+        true,
+        new
+        {
+            submissionId = submission.Id,
+            assignmentId = assignmentId,
+            studentId = submission.StudentId,
+            score = submission.Score,
+            feedback = submission.Feedback,
+            isGraded = submission.IsGraded,
+            gradedAt = submission.GradedAt
+        },
+        null
+    );
+}
+
+
 
     // ================================================================
     // UPDATE ASSIGNMENT
