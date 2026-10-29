@@ -16,6 +16,43 @@ public class TeacherPortalService(
     private readonly ApplicationDbContext _context = context;
     private readonly ILogger<TeacherPortalService> _logger = logger;
 
+    
+/// <summary>
+/// True when the teacher is assigned to teach this subject in this
+/// class (TeacherSubjects row with that ClassId + SubjectId).
+/// Being class teacher alone is NOT enough to upload a subject's
+/// results — that belongs to the subject teacher.
+/// </summary>
+private Task<bool> TeachesSubjectInClassAsync(
+    Guid teacherId,
+    Guid classId,
+    Guid subjectId)
+{
+    return _context.TeacherSubjects
+        .AsNoTracking()
+        .AnyAsync(x =>
+            x.TeacherId == teacherId &&
+            x.ClassId == classId &&
+            x.SubjectId == subjectId);
+}
+ 
+/// <summary>
+/// True when the teacher is the class teacher of this class.
+/// Class teachers can VIEW every subject's results for their class.
+/// </summary>
+private async Task<bool> IsClassTeacherAsync(Guid teacherId, Guid classId)
+{
+    return
+        await _context.TeacherClasses
+            .AsNoTracking()
+            .AnyAsync(x => x.TeacherId == teacherId && x.ClassId == classId)
+        ||
+        await _context.ClassTeachers
+            .AsNoTracking()
+            .AnyAsync(x => x.TeacherId == teacherId && x.ClassId == classId);
+}
+ 
+
     // ================================================================
     // PROFILE
     // ================================================================
@@ -814,25 +851,25 @@ public class TeacherPortalService(
                 "There is no active academic term."
             );
         }
-        // ============================================================
-        // VALIDATE CLASS
-        // ============================================================
+        // // ============================================================
+        // // VALIDATE CLASS
+        // // ============================================================
 
-        var classExists = await _context.TeacherClasses
-            .AsNoTracking()
-            .AnyAsync(x =>
-                x.TeacherId == teacher.Id &&
-                x.ClassId == request.ClassId &&
-                x.Class.SchoolId == schoolId);
+        // var classExists = await _context.TeacherClasses
+        //     .AsNoTracking()
+        //     .AnyAsync(x =>
+        //         x.TeacherId == teacher.Id &&
+        //         x.ClassId == request.ClassId &&
+        //         x.Class.SchoolId == schoolId);
 
-        if (!classExists)
-        {
-            return (
-                false,
-                null,
-                "You are not assigned to this class."
-            );
-        }
+        // if (!classExists)
+        // {
+        //     return (
+        //         false,
+        //         null,
+        //         "You are not assigned to this class."
+        //     );
+        // }
 
         // ============================================================
         // VALIDATE SUBJECT
@@ -860,25 +897,35 @@ public class TeacherPortalService(
             );
         }
 
-        // ============================================================
-        // TEACHER MUST TEACH SUBJECT
-        // ============================================================
+        // // ============================================================
+        // // TEACHER MUST TEACH SUBJECT
+        // // ============================================================
 
-        var teachesSubject = await _context.TeacherSubjects
-            .AsNoTracking()
-            .AnyAsync(x =>
-                x.TeacherId == teacher.Id &&
-                x.SubjectId == request.SubjectId &&
-                x.Subject.SchoolId == schoolId);
+        // var teachesSubject = await _context.TeacherSubjects
+        //     .AsNoTracking()
+        //     .AnyAsync(x =>
+        //         x.TeacherId == teacher.Id &&
+        //         x.SubjectId == request.SubjectId &&
+        //         x.Subject.SchoolId == schoolId);
 
-        if (!teachesSubject)
-        {
-            return (
-                false,
-                null,
-                "You are not assigned to this subject."
-            );
-        }
+        // if (!teachesSubject)
+        // {
+        //     return (
+        //         false,
+        //         null,
+        //         "You are not assigned to this subject."
+        //     );
+        // }
+
+ if (!await TeachesSubjectInClassAsync(
+               teacher.Id, request.ClassId, request.SubjectId))
+       {
+           return (
+               false,
+               null,
+               "You don't teach this subject in this class."
+           );
+       }
 
         // ============================================================
         // VALIDATE RESULTS
@@ -1236,21 +1283,21 @@ public class TeacherPortalService(
         // VALIDATE CLASS
         // ============================================================
 
-        var classExists = await _context.TeacherClasses
-            .AsNoTracking()
-            .AnyAsync(x =>
-                x.TeacherId == teacher.Id &&
-                x.ClassId == request.ClassId &&
-                x.Class.SchoolId == schoolId);
+        // var classExists = await _context.TeacherClasses
+        //     .AsNoTracking()
+        //     .AnyAsync(x =>
+        //         x.TeacherId == teacher.Id &&
+        //         x.ClassId == request.ClassId &&
+        //         x.Class.SchoolId == schoolId);
 
-        if (!classExists)
-        {
-            return (
-                false,
-                null,
-                "You are not assigned to this class."
-            );
-        }
+        // if (!classExists)
+        // {
+        //     return (
+        //         false,
+        //         null,
+        //         "You are not assigned to this class."
+        //     );
+        // }
 
         // ============================================================
         // VALIDATE SUBJECT
@@ -1278,25 +1325,35 @@ public class TeacherPortalService(
             );
         }
 
-        // ============================================================
-        // TEACHER MUST TEACH SUBJECT
-        // ============================================================
+        // // ============================================================
+        // // TEACHER MUST TEACH SUBJECT
+        // // ============================================================
 
-        var teachesSubject = await _context.TeacherSubjects
-            .AsNoTracking()
-            .AnyAsync(x =>
-                x.TeacherId == teacher.Id &&
-                x.SubjectId == request.SubjectId &&
-                x.Subject.SchoolId == schoolId);
+        // var teachesSubject = await _context.TeacherSubjects
+        //     .AsNoTracking()
+        //     .AnyAsync(x =>
+        //         x.TeacherId == teacher.Id &&
+        //         x.SubjectId == request.SubjectId &&
+        //         x.Subject.SchoolId == schoolId);
 
-        if (!teachesSubject)
-        {
-            return (
-                false,
-                null,
-                "You are not assigned to this subject."
-            );
-        }
+        // if (!teachesSubject)
+        // {
+        //     return (
+        //         false,
+        //         null,
+        //         "You are not assigned to this subject."
+        //     );
+        // }
+
+          if (!await TeachesSubjectInClassAsync(
+               teacher.Id, request.ClassId, request.SubjectId))
+       {
+           return (
+               false,
+               null,
+               "You don't teach this subject in this class."
+           );
+       }
 
         // ============================================================
         // VALIDATE RESULTS
@@ -1654,21 +1711,21 @@ public class TeacherPortalService(
         // VALIDATE CLASS
         // ============================================================
 
-        var classExists = await _context.TeacherClasses
-            .AsNoTracking()
-            .AnyAsync(x =>
-                x.TeacherId == teacher.Id &&
-                x.ClassId == request.ClassId &&
-                x.Class.SchoolId == schoolId);
+        // var classExists = await _context.TeacherClasses
+        //     .AsNoTracking()
+        //     .AnyAsync(x =>
+        //         x.TeacherId == teacher.Id &&
+        //         x.ClassId == request.ClassId &&
+        //         x.Class.SchoolId == schoolId);
 
-        if (!classExists)
-        {
-            return (
-                false,
-                null,
-                "You are not assigned to this class."
-            );
-        }
+        // if (!classExists)
+        // {
+        //     return (
+        //         false,
+        //         null,
+        //         "You are not assigned to this class."
+        //     );
+        // }
 
         // ============================================================
         // VALIDATE SUBJECT
@@ -1696,25 +1753,35 @@ public class TeacherPortalService(
             );
         }
 
-        // ============================================================
-        // TEACHER MUST TEACH SUBJECT
-        // ============================================================
+        // // ============================================================
+        // // TEACHER MUST TEACH SUBJECT
+        // // ============================================================
 
-        var teachesSubject = await _context.TeacherSubjects
-            .AsNoTracking()
-            .AnyAsync(x =>
-                x.TeacherId == teacher.Id &&
-                x.SubjectId == request.SubjectId &&
-                x.Subject.SchoolId == schoolId);
+        // var teachesSubject = await _context.TeacherSubjects
+        //     .AsNoTracking()
+        //     .AnyAsync(x =>
+        //         x.TeacherId == teacher.Id &&
+        //         x.SubjectId == request.SubjectId &&
+        //         x.Subject.SchoolId == schoolId);
 
-        if (!teachesSubject)
-        {
-            return (
-                false,
-                null,
-                "You are not assigned to this subject."
-            );
-        }
+        // if (!teachesSubject)
+        // {
+        //     return (
+        //         false,
+        //         null,
+        //         "You are not assigned to this subject."
+        //     );
+        // }
+
+             if (!await TeachesSubjectInClassAsync(
+               teacher.Id, request.ClassId, request.SubjectId))
+       {
+           return (
+               false,
+               null,
+               "You don't teach this subject in this class."
+           );
+       }
 
         // ============================================================
         // VALIDATE RESULTS
@@ -2187,25 +2254,35 @@ public class TeacherPortalService(
             );
         }
 
-        // ============================================================
-        // TEACHER MUST TEACH SUBJECT
-        // ============================================================
+        // // ============================================================
+        // // TEACHER MUST TEACH SUBJECT
+        // // ============================================================
 
-        var teachesSubject = await _context.TeacherSubjects
-            .AsNoTracking()
-            .AnyAsync(x =>
-                x.TeacherId == teacher.Id &&
-                x.SubjectId == request.SubjectId &&
-                x.Subject.SchoolId == schoolId);
+        // var teachesSubject = await _context.TeacherSubjects
+        //     .AsNoTracking()
+        //     .AnyAsync(x =>
+        //         x.TeacherId == teacher.Id &&
+        //         x.SubjectId == request.SubjectId &&
+        //         x.Subject.SchoolId == schoolId);
 
-        if (!teachesSubject)
-        {
-            return (
-                false,
-                null,
-                "You are not assigned to this subject."
-            );
-        }
+        // if (!teachesSubject)
+        // {
+        //     return (
+        //         false,
+        //         null,
+        //         "You are not assigned to this subject."
+        //     );
+        // }
+
+             if (!await TeachesSubjectInClassAsync(
+               teacher.Id, request.ClassId, request.SubjectId))
+       {
+           return (
+               false,
+               null,
+               "You don't teach this subject in this class."
+           );
+       }
 
         // ============================================================
         // FIND EXISTING RESULT
@@ -2480,25 +2557,25 @@ public class TeacherPortalService(
             );
         }
 
-        // ============================================================
-        // TEACHER MUST TEACH CLASS
-        // ============================================================
+        // // ============================================================
+        // // TEACHER MUST TEACH CLASS
+        // // ============================================================
 
-        var teachesClass = await _context.TeacherClasses
-            .AsNoTracking()
-            .AnyAsync(x =>
-                x.TeacherId == teacher.Id &&
-                x.ClassId == request.ClassId &&
-                x.Class.SchoolId == schoolId);
+        // var teachesClass = await _context.TeacherClasses
+        //     .AsNoTracking()
+        //     .AnyAsync(x =>
+        //         x.TeacherId == teacher.Id &&
+        //         x.ClassId == request.ClassId &&
+        //         x.Class.SchoolId == schoolId);
 
-        if (!teachesClass)
-        {
-            return (
-                false,
-                null,
-                "You are not assigned to this class."
-            );
-        }
+        // if (!teachesClass)
+        // {
+        //     return (
+        //         false,
+        //         null,
+        //         "You are not assigned to this class."
+        //     );
+        // }
 
         // ============================================================
         // VALIDATE SUBJECT
@@ -2526,25 +2603,35 @@ public class TeacherPortalService(
             );
         }
 
-        // ============================================================
-        // TEACHER MUST TEACH SUBJECT
-        // ============================================================
+        // // ============================================================
+        // // TEACHER MUST TEACH SUBJECT
+        // // ============================================================
 
-        var teachesSubject = await _context.TeacherSubjects
-            .AsNoTracking()
-            .AnyAsync(x =>
-                x.TeacherId == teacher.Id &&
-                x.SubjectId == request.SubjectId &&
-                x.Subject.SchoolId == schoolId);
+        // var teachesSubject = await _context.TeacherSubjects
+        //     .AsNoTracking()
+        //     .AnyAsync(x =>
+        //         x.TeacherId == teacher.Id &&
+        //         x.SubjectId == request.SubjectId &&
+        //         x.Subject.SchoolId == schoolId);
 
-        if (!teachesSubject)
-        {
-            return (
-                false,
-                null,
-                "You are not assigned to this subject."
-            );
-        }
+        // if (!teachesSubject)
+        // {
+        //     return (
+        //         false,
+        //         null,
+        //         "You are not assigned to this subject."
+        //     );
+        // }
+
+             if (!await TeachesSubjectInClassAsync(
+               teacher.Id, request.ClassId, request.SubjectId))
+       {
+           return (
+               false,
+               null,
+               "You don't teach this subject in this class."
+           );
+       }
 
         // ============================================================
         // FIND EXISTING RESULT
@@ -2838,21 +2925,21 @@ public class TeacherPortalService(
         // TEACHER MUST TEACH CLASS
         // ============================================================
 
-        var teachesClass = await _context.TeacherClasses
-            .AsNoTracking()
-            .AnyAsync(x =>
-                x.TeacherId == teacher.Id &&
-                x.ClassId == request.ClassId &&
-                x.Class.SchoolId == schoolId);
+        // var teachesClass = await _context.TeacherClasses
+        //     .AsNoTracking()
+        //     .AnyAsync(x =>
+        //         x.TeacherId == teacher.Id &&
+        //         x.ClassId == request.ClassId &&
+        //         x.Class.SchoolId == schoolId);
 
-        if (!teachesClass)
-        {
-            return (
-                false,
-                null,
-                "You are not assigned to this class."
-            );
-        }
+        // if (!teachesClass)
+        // {
+        //     return (
+        //         false,
+        //         null,
+        //         "You are not assigned to this class."
+        //     );
+        // }
 
         // ============================================================
         // VALIDATE SUBJECT
@@ -2880,25 +2967,35 @@ public class TeacherPortalService(
             );
         }
 
-        // ============================================================
-        // TEACHER MUST TEACH SUBJECT
-        // ============================================================
+        // // ============================================================
+        // // TEACHER MUST TEACH SUBJECT
+        // // ============================================================
 
-        var teachesSubject = await _context.TeacherSubjects
-            .AsNoTracking()
-            .AnyAsync(x =>
-                x.TeacherId == teacher.Id &&
-                x.SubjectId == request.SubjectId &&
-                x.Subject.SchoolId == schoolId);
+        // var teachesSubject = await _context.TeacherSubjects
+        //     .AsNoTracking()
+        //     .AnyAsync(x =>
+        //         x.TeacherId == teacher.Id &&
+        //         x.SubjectId == request.SubjectId &&
+        //         x.Subject.SchoolId == schoolId);
 
-        if (!teachesSubject)
-        {
-            return (
-                false,
-                null,
-                "You are not assigned to this subject."
-            );
-        }
+        // if (!teachesSubject)
+        // {
+        //     return (
+        //         false,
+        //         null,
+        //         "You are not assigned to this subject."
+        //     );
+        // }
+
+             if (!await TeachesSubjectInClassAsync(
+               teacher.Id, request.ClassId, request.SubjectId))
+       {
+           return (
+               false,
+               null,
+               "You don't teach this subject in this class."
+           );
+       }
 
         // ============================================================
         // CHECK EXISTING RESULT
@@ -3054,7 +3151,7 @@ public class TeacherPortalService(
         );
     }
 
-    public async Task<(bool Success, object? Data, string? Error)>
+ public async Task<(bool Success, object? Data, string? Error)>
         UpdateTestResultAsync(
             string userId,
             Guid resultId,
@@ -3149,40 +3246,16 @@ public class TeacherPortalService(
 
 
         // ============================================================
-        // TEACHER MUST TEACH CLASS
+        // TEACHER MUST TEACH THIS SUBJECT IN THIS CLASS
         // ============================================================
 
-        var teachesClass = await _context.TeacherClasses
-            .AnyAsync(x =>
-                x.TeacherId == teacher.Id &&
-                x.ClassId == result.ClassId &&
-                x.Class.SchoolId == schoolId);
-
-        if (!teachesClass)
+        if (!await TeachesSubjectInClassAsync(
+                teacher.Id, result.ClassId, result.SubjectId))
         {
             return (
                 false,
                 null,
-                "You are not assigned to this class."
-            );
-        }
-
-        // ============================================================
-        // TEACHER MUST TEACH SUBJECT
-        // ============================================================
-
-        var teachesSubject = await _context.TeacherSubjects
-            .AnyAsync(x =>
-                x.TeacherId == teacher.Id &&
-                x.SubjectId == result.SubjectId &&
-                x.Subject.SchoolId == schoolId);
-
-        if (!teachesSubject)
-        {
-            return (
-                false,
-                null,
-                "You are not assigned to this subject."
+                "You don't teach this subject in this class."
             );
         }
 
@@ -3289,6 +3362,8 @@ public class TeacherPortalService(
             null
         );
     }
+
+
     public async Task<(bool Success, object? Data, string? Error)>
     UpdateExamResultAsync(
     string userId,
@@ -3385,41 +3460,55 @@ public class TeacherPortalService(
             );
         }
 
-        // ============================================================
-        // TEACHER MUST TEACH CLASS
+        // // ============================================================
+        // // TEACHER MUST TEACH CLASS
+        // // ============================================================
+
+        // var teachesClass = await _context.TeacherClasses
+        //     .AnyAsync(x =>
+        //         x.TeacherId == teacher.Id &&
+        //         x.ClassId == result.ClassId &&
+        //         x.Class.SchoolId == schoolId);
+
+        // if (!teachesClass)
+        // {
+        //     return (
+        //         false,
+        //         null,
+        //         "You are not assigned to this class."
+        //     );
+        // }
+
+        // // ============================================================
+        // // TEACHER MUST TEACH SUBJECT
+        // // ============================================================
+
+        // var teachesSubject = await _context.TeacherSubjects
+        //     .AnyAsync(x =>
+        //         x.TeacherId == teacher.Id &&
+        //         x.SubjectId == result.SubjectId &&
+        //         x.Subject.SchoolId == schoolId);
+
+        // if (!teachesSubject)
+        // {
+        //     return (
+        //         false,
+        //         null,
+        //         "You are not assigned to this subject."
+        //     );
+        // }
+
+                // ============================================================
+        // TEACHER MUST TEACH THIS SUBJECT IN THIS CLASS
         // ============================================================
 
-        var teachesClass = await _context.TeacherClasses
-            .AnyAsync(x =>
-                x.TeacherId == teacher.Id &&
-                x.ClassId == result.ClassId &&
-                x.Class.SchoolId == schoolId);
-
-        if (!teachesClass)
+        if (!await TeachesSubjectInClassAsync(
+                teacher.Id, result.ClassId, result.SubjectId))
         {
             return (
                 false,
                 null,
-                "You are not assigned to this class."
-            );
-        }
-
-        // ============================================================
-        // TEACHER MUST TEACH SUBJECT
-        // ============================================================
-
-        var teachesSubject = await _context.TeacherSubjects
-            .AnyAsync(x =>
-                x.TeacherId == teacher.Id &&
-                x.SubjectId == result.SubjectId &&
-                x.Subject.SchoolId == schoolId);
-
-        if (!teachesSubject)
-        {
-            return (
-                false,
-                null,
-                "You are not assigned to this subject."
+                "You don't teach this subject in this class."
             );
         }
 
@@ -3627,44 +3716,57 @@ public class TeacherPortalService(
             );
         }
 
+        // // ============================================================
+        // // TEACHER MUST TEACH CLASS
+        // // ============================================================
+
+        // var teachesClass = await _context.TeacherClasses
+        //     .AnyAsync(x =>
+        //         x.TeacherId == teacher.Id &&
+        //         x.ClassId == result.ClassId &&
+        //         x.Class.SchoolId == schoolId);
+
+        // if (!teachesClass)
+        // {
+        //     return (
+        //         false,
+        //         null,
+        //         "You are not assigned to this class."
+        //     );
+        // }
+
+        // // ============================================================
+        // // TEACHER MUST TEACH SUBJECT
+        // // ============================================================
+
+        // var teachesSubject = await _context.TeacherSubjects
+        //     .AnyAsync(x =>
+        //         x.TeacherId == teacher.Id &&
+        //         x.SubjectId == result.SubjectId &&
+        //         x.Subject.SchoolId == schoolId);
+
+        // if (!teachesSubject)
+        // {
+        //     return (
+        //         false,
+        //         null,
+        //         "You are not assigned to this subject."
+        //     );
+        // }
+
         // ============================================================
-        // TEACHER MUST TEACH CLASS
+        // TEACHER MUST TEACH THIS SUBJECT IN THIS CLASS
         // ============================================================
 
-        var teachesClass = await _context.TeacherClasses
-            .AnyAsync(x =>
-                x.TeacherId == teacher.Id &&
-                x.ClassId == result.ClassId &&
-                x.Class.SchoolId == schoolId);
-
-        if (!teachesClass)
+        if (!await TeachesSubjectInClassAsync(
+                teacher.Id, result.ClassId, result.SubjectId))
         {
             return (
                 false,
                 null,
-                "You are not assigned to this class."
+                "You don't teach this subject in this class."
             );
         }
-
-        // ============================================================
-        // TEACHER MUST TEACH SUBJECT
-        // ============================================================
-
-        var teachesSubject = await _context.TeacherSubjects
-            .AnyAsync(x =>
-                x.TeacherId == teacher.Id &&
-                x.SubjectId == result.SubjectId &&
-                x.Subject.SchoolId == schoolId);
-
-        if (!teachesSubject)
-        {
-            return (
-                false,
-                null,
-                "You are not assigned to this subject."
-            );
-        }
-
         // ============================================================
         // VALIDATE TEST
         // ============================================================
@@ -3782,208 +3884,144 @@ public class TeacherPortalService(
     // GET TEACHER RESULTS
     // ================================================================
 
-    public async Task<(bool Success, object? Data, string? Error)>
-        GetResultsAsync(
-            string userId,
-            GetTeacherResultsRequest request)
+   
+public async Task<(bool Success, object? Data, string? Error)>
+    GetResultsAsync(
+        string userId,
+        GetTeacherResultsRequest request)
+{
+    var teacher = await _context.Teachers
+        .AsNoTracking()
+        .FirstOrDefaultAsync(x => x.UserId == userId);
+ 
+    if (teacher == null)
     {
-        // ============================================================
-        // GET TEACHER
-        // ============================================================
-
-        var teacher = await _context.Teachers
-     .AsNoTracking()
-     .FirstOrDefaultAsync(x =>
-         x.UserId == userId);
-
-        if (teacher == null)
-        {
-            return (
-                false,
-                null,
-                "Teacher profile not found."
-            );
-        }
-
-        var schoolId = teacher.SchoolId;
-
-        // ============================================================
-        // CURRENT ACADEMIC SESSION
-        // ============================================================
-
-        var period = await _context.AcademicSessions
+        return (false, null, "Teacher profile not found.");
+    }
+ 
+    var schoolId = teacher.SchoolId;
+    var teacherId = teacher.Id;
+ 
+    // ------------------------------------------------------------
+    // PERIOD (default to current)
+    // ------------------------------------------------------------
+ 
+    var session = request.Session?.Trim();
+    var term = request.Term?.Trim();
+ 
+    if (string.IsNullOrWhiteSpace(session) || string.IsNullOrWhiteSpace(term))
+    {
+        var current = await _context.AcademicSessions
             .AsNoTracking()
-            .FirstOrDefaultAsync(x =>
-                x.SchoolId == schoolId &&
-                x.IsCurrent);
-
-        if (period == null)
-        {
-            return (
-                false,
-                null,
-                "There is no active academic session."
-            );
-        }
-
-        // ============================================================
-        // CURRENT ACADEMIC TERM
-        // ============================================================
-
-        var currentTerm = await _context.AcademicTerms
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x =>
-                x.AcademicSessionId == period.Id &&
-                x.IsCurrent);
-
-        if (currentTerm == null)
-        {
-            return (
-                false,
-                null,
-                "There is no active academic term."
-            );
-        }
-
-        // ============================================================
-        // BASE QUERY
-        // ============================================================
-
-        var query = _context.StudentResults
-            .AsNoTracking()
-            .Where(x =>
-                x.SchoolId == schoolId);
-
-        // ============================================================
-        // FILTER BY CLASS
-        // ============================================================
-
-        if (request.ClassId.HasValue)
-        {
-            var teachesClass = await _context.TeacherClasses
-                .AsNoTracking()
-                .AnyAsync(x =>
-                    x.TeacherId == teacher.Id &&
-                    x.ClassId == request.ClassId.Value &&
-                    x.Class.SchoolId == schoolId);
-
-            if (!teachesClass)
-            {
-                return (
-                    false,
-                    null,
-                    "You are not assigned to this class."
-                );
-            }
-
-            query = query.Where(x =>
-                x.ClassId == request.ClassId.Value);
-        }
-
-        // ============================================================
-        // FILTER BY SUBJECT
-        // ============================================================
-
-        if (request.SubjectId.HasValue)
-        {
-            var teachesSubject = await _context.TeacherSubjects
-                .AsNoTracking()
-                .AnyAsync(x =>
-                    x.TeacherId == teacher.Id &&
-                    x.SubjectId == request.SubjectId.Value &&
-                    x.Subject.SchoolId == schoolId);
-
-            if (!teachesSubject)
-            {
-                return (
-                    false,
-                    null,
-                    "You are not assigned to this subject."
-                );
-            }
-
-            query = query.Where(x =>
-                x.SubjectId == request.SubjectId.Value);
-        }
-
-        // ============================================================
-        // SESSION
-        // ============================================================
-
-        if (!string.IsNullOrWhiteSpace(request.Session))
-        {
-            query = query.Where(x =>
-                x.Session == request.Session);
-        }
-
-        // ============================================================
-        // TERM
-        // ============================================================
-
-        if (!string.IsNullOrWhiteSpace(request.Term))
-        {
-            query = query.Where(x =>
-                x.Term == request.Term);
-        }
-
-        // ============================================================
-        // GET RESULTS
-        // ============================================================
-
-        var results = await query
-            .OrderBy(x => x.Student.User.FullName)
+            .Where(x => x.SchoolId == schoolId && x.IsCurrent)
             .Select(x => new
             {
-                resultId = x.Id,
-
-                schoolId = x.SchoolId,
-
-                studentId = x.StudentId,
-                studentName = x.Student.User.FullName,
-                studentNumber = x.Student.StudentNumber,
-
-                classId = x.ClassId,
-                className = x.Class.Name,
-
-                subjectId = x.SubjectId,
-                subjectName = x.Subject.Name,
-                subjectCode = x.Subject.Code,
-
-                session = x.Session,
-                term = x.Term,
-
-                testScore = x.TestScore,
-                examScore = x.ExamScore,
-
-                score = x.Score,
-                grade = x.Grade,
-
-                remark = x.Remark,
-
-                createdAt = x.CreatedAt
+                x.Session,
+                Term = _context.AcademicTerms
+                    .Where(t => t.AcademicSessionId == x.Id && t.IsCurrent)
+                    .Select(t => t.Term)
+                    .FirstOrDefault()
             })
-            .ToListAsync();
-
-        // ============================================================
-        // RESPONSE
-        // ============================================================
-
-        return (
-            true,
-            new
-            {
-                schoolId,
-
-                currentSession = period.Session,
-                currentTerm = currentTerm.Term,
-
-                count = results.Count,
-
-                results
-            },
-            null
-        );
+            .FirstOrDefaultAsync();
+ 
+        if (string.IsNullOrWhiteSpace(session)) session = current?.Session;
+        if (string.IsNullOrWhiteSpace(term)) term = current?.Term;
     }
+ 
+    // ------------------------------------------------------------
+    // ACCESS
+    // ------------------------------------------------------------
+ 
+    var subjectClassPairs = _context.TeacherSubjects
+        .Where(ts => ts.TeacherId == teacherId);
+ 
+    var classTeacherClassIds = _context.TeacherClasses
+        .Where(tc => tc.TeacherId == teacherId)
+        .Select(tc => tc.ClassId)
+        .Union(_context.ClassTeachers
+            .Where(ct => ct.TeacherId == teacherId)
+            .Select(ct => ct.ClassId));
+ 
+    var query = _context.StudentResults
+        .AsNoTracking()
+        .Where(r =>
+            r.SchoolId == schoolId &&
+            r.Student.SchoolId == schoolId &&
+            (
+                subjectClassPairs.Any(ts =>
+                    ts.ClassId == r.ClassId &&
+                    ts.SubjectId == r.SubjectId) ||
+                classTeacherClassIds.Contains(r.ClassId)
+            ));
+ 
+    // ------------------------------------------------------------
+    // FILTERS
+    // ------------------------------------------------------------
+ 
+    if (request.StudentId.HasValue)
+        query = query.Where(r => r.StudentId == request.StudentId.Value);
+ 
+    if (request.ClassId.HasValue)
+        query = query.Where(r => r.ClassId == request.ClassId.Value);
+ 
+    if (request.SubjectId.HasValue)
+        query = query.Where(r => r.SubjectId == request.SubjectId.Value);
+ 
+    if (!string.IsNullOrWhiteSpace(session))
+        query = query.Where(r => r.Session == session);
+ 
+    if (!string.IsNullOrWhiteSpace(term))
+        query = query.Where(r => r.Term == term);
+ 
+    // ------------------------------------------------------------
+    // RESULT
+    // ------------------------------------------------------------
+ 
+    var results = await query
+        .OrderBy(r => r.Class.Name)
+        .ThenBy(r => r.Student.User.FullName)
+        .ThenBy(r => r.Subject.Name)
+        .Select(r => new
+        {
+            resultId = r.Id,
+ 
+            studentId = r.StudentId,
+            studentName = r.Student.User.FullName,
+            studentNumber = r.Student.StudentNumber,
+ 
+            classId = r.ClassId,
+            className = r.Class.Name,
+ 
+            subjectId = r.SubjectId,
+            subjectName = r.Subject.Name,
+            subjectCode = r.Subject.Code,
+ 
+            session = r.Session,
+            term = r.Term,
+ 
+            testScore = r.TestScore,
+            examScore = r.ExamScore,
+            score = r.Score,
+ 
+            grade = r.Grade,
+            remark = r.Remark,
+ 
+            createdAt = r.CreatedAt
+        })
+        .ToListAsync();
+ 
+    return (
+        true,
+        new
+        {
+            session,
+            term,
+            count = results.Count,
+            results
+        },
+        null
+    );
+}
 
     public async Task<(
      bool Success,
