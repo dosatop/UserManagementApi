@@ -27,16 +27,81 @@ public interface ITeacherPortalService
     Task<(bool Success, object? Data, string? Error)>
         GetSubjectsAsync(string userId);
 
+    // ================================================================
+    // STUDENTS
+    // ================================================================
+
     Task<(bool Success, object? Data, string? Error)>
-GetStudentsAsync(
-string userId,
-Guid? classId = null);
+        GetStudentsAsync(
+            string userId,
+            Guid? classId = null);
 
-Task<(bool Success, object? Data, string? Error)>
-    GetStudentDetailsAsync(
-        string userId,
-        Guid studentId);
+    Task<(bool Success, object? Data, string? Error)>
+        GetStudentDetailsAsync(
+            string userId,
+            Guid studentId);
 
+    // ================================================================
+    // RESULTS
+    // ================================================================
+
+    Task<(bool Success, object? Data, string? Error)>
+        GetResultsAsync(
+            string userId,
+            GetTeacherResultsRequest request);
+
+    Task<(bool Success, object? Data, string? Error)>
+        UploadResultAsync(
+            string userId,
+            UploadResultRequest request);
+
+    Task<(bool Success, object? Data, string? Error)>
+        UploadTestResultAsync(
+            string userId,
+            UploadTestResultRequest request);
+
+    Task<(bool Success, object? Data, string? Error)>
+        UploadExamResultAsync(
+            string userId,
+            UploadExamResultRequest request);
+
+    Task<(bool Success, object? Data, string? Error)>
+        BulkResultAsync(
+            string userId,
+            BulkResultRequest request);
+
+    Task<(bool Success, object? Data, string? Error)>
+        BulkTestResultAsync(
+            string userId,
+            BulkTestResultRequest request);
+
+    Task<(bool Success, object? Data, string? Error)>
+        BulkExamResultAsync(
+            string userId,
+            BulkExamResultRequest request);
+
+    Task<(bool Success, object? Data, string? Error)>
+        UpdateResultAsync(
+            string userId,
+            Guid resultId,
+            UpdateResultRequest request);
+
+    Task<(bool Success, object? Data, string? Error)>
+        UpdateTestResultAsync(
+            string userId,
+            Guid resultId,
+            UpdateTestResultRequest request);
+
+    Task<(bool Success, object? Data, string? Error)>
+        UpdateExamResultAsync(
+            string userId,
+            Guid resultId,
+            UpdateExamResultRequest request);
+
+    Task<(bool Success, object? Data, string? Error)>
+        DeleteResultAsync(
+            string userId,
+            Guid resultId);
 
     // ================================================================
     // ASSIGNMENTS
@@ -77,7 +142,7 @@ Task<(bool Success, object? Data, string? Error)>
             string userId,
             CreateAttendanceRequest request);
 
-            Task<(bool Success, object? Data, string? Error)>
+    Task<(bool Success, object? Data, string? Error)>
         CreateBulkAttendanceAsync(
             string userId,
             CreateBulkAttendanceRequest request);
@@ -102,5 +167,4 @@ Task<(bool Success, object? Data, string? Error)>
         DeleteAttendanceAsync(
             string userId,
             Guid attendanceId);
-
 }

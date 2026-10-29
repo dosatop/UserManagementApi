@@ -23,7 +23,7 @@ public class TeacherController(
 {
     private readonly ITeacherPortalService _teacherService = teacherService;
     private readonly ICurrentUserService _currentUser = currentUser;
-    private readonly IResultService _resultService = resultService;
+    // private readonly IResultService _resultService = resultService;
     private readonly ApplicationDbContext _context = context;
 
 
@@ -210,7 +210,7 @@ public class TeacherController(
             });
         }
 
-        var result = await _resultService.GetResultsAsync(
+        var result = await _teacherService.GetResultsAsync(
             userId,
             request);
 
@@ -245,7 +245,7 @@ public class TeacherController(
             });
         }
 
-        var result = await _resultService.UploadResultAsync(
+        var result = await _teacherService.UploadResultAsync(
             userId,
             request);
 
@@ -279,7 +279,7 @@ public class TeacherController(
             });
         }
 
-        var result = await _resultService.UploadTestResultAsync(
+        var result = await _teacherService.UploadTestResultAsync(
             userId,
             request);
 
@@ -313,7 +313,7 @@ public class TeacherController(
             });
         }
 
-        var result = await _resultService.UploadExamResultAsync(
+        var result = await _teacherService.UploadExamResultAsync(
             userId,
             request);
 
@@ -347,7 +347,7 @@ public class TeacherController(
             });
         }
 
-        var result = await _resultService.BulkResultAsync(
+        var result = await _teacherService.BulkResultAsync(
             userId,
             request);
 
@@ -381,7 +381,7 @@ public class TeacherController(
             });
         }
 
-        var result = await _resultService.BulkTestResultAsync(
+        var result = await _teacherService.BulkTestResultAsync(
             userId,
             request);
 
@@ -415,7 +415,7 @@ public class TeacherController(
             });
         }
 
-        var result = await _resultService.BulkExamResultAsync(
+        var result = await _teacherService.BulkExamResultAsync(
             userId,
             request);
 
@@ -450,7 +450,7 @@ public class TeacherController(
             });
         }
 
-        var result = await _resultService.UpdateResultAsync(
+        var result = await _teacherService.UpdateResultAsync(
             userId,
             resultId,
             request);
@@ -494,7 +494,7 @@ public class TeacherController(
             });
         }
 
-        var result = await _resultService.UpdateTestResultAsync(
+        var result = await _teacherService.UpdateTestResultAsync(
             userId,
             resultId,
             request);
@@ -538,7 +538,7 @@ public class TeacherController(
             });
         }
 
-        var result = await _resultService.UpdateExamResultAsync(
+        var result = await _teacherService.UpdateExamResultAsync(
             userId,
             resultId,
             request);
@@ -581,7 +581,7 @@ public class TeacherController(
             });
         }
 
-        var result = await _resultService.DeleteResultAsync(
+        var result = await _teacherService.DeleteResultAsync(
             userId,
             resultId);
 

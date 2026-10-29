@@ -4023,6 +4023,108 @@ public async Task<(bool Success, object? Data, string? Error)>
     );
 }
 
+    // ================================================================
+    // DELETE RESULT
+    // ================================================================
+
+    public async Task<(bool Success, object? Data, string? Error)>
+        DeleteResultAsync(
+            string userId,
+            Guid resultId)
+    {
+        // ------------------------------------------------------------
+        // GET TEACHER
+        // ------------------------------------------------------------
+
+        var teacher = await _context.Teachers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.UserId == userId);
+
+        if (teacher == null)
+        {
+            return (false, null, "Teacher profile not found.");
+        }
+
+        var schoolId = teacher.SchoolId;
+
+        // ------------------------------------------------------------
+        // GET RESULT
+        // ------------------------------------------------------------
+
+        var result = await _context.StudentResults
+            .FirstOrDefaultAsync(x =>
+                x.Id == resultId &&
+                x.SchoolId == schoolId);
+
+        if (result == null)
+        {
+            // Keep this exact text: the controller returns 404 for it.
+            return (false, null, "Result not found.");
+        }
+
+        // ------------------------------------------------------------
+        // TEACHER MUST TEACH THIS SUBJECT IN THIS CLASS
+        // ------------------------------------------------------------
+
+        if (!await TeachesSubjectInClassAsync(
+                teacher.Id, result.ClassId, result.SubjectId))
+        {
+            return (
+                false,
+                null,
+                "You don't teach this subject in this class."
+            );
+        }
+
+        // ------------------------------------------------------------
+        // ONLY THE CURRENT TERM CAN BE DELETED
+        // ------------------------------------------------------------
+
+        var current = await _context.AcademicSessions
+            .AsNoTracking()
+            .Where(x => x.SchoolId == schoolId && x.IsCurrent)
+            .Select(x => new
+            {
+                x.Session,
+                Term = _context.AcademicTerms
+                    .Where(t => t.AcademicSessionId == x.Id && t.IsCurrent)
+                    .Select(t => t.Term)
+                    .FirstOrDefault()
+            })
+            .FirstOrDefaultAsync();
+
+        if (current == null ||
+            result.Session != current.Session ||
+            result.Term != current.Term)
+        {
+            return (
+                false,
+                null,
+                "Only results for the current academic period can be deleted."
+            );
+        }
+
+        // ------------------------------------------------------------
+        // DELETE
+        // ------------------------------------------------------------
+
+        var deleted = new
+        {
+            resultId = result.Id,
+            studentId = result.StudentId,
+            classId = result.ClassId,
+            subjectId = result.SubjectId,
+            session = result.Session,
+            term = result.Term
+        };
+
+        _context.StudentResults.Remove(result);
+
+        await _context.SaveChangesAsync();
+
+        return (true, deleted, null);
+    }
+
     public async Task<(
      bool Success,
      object? Data,
