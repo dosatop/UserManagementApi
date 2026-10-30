@@ -11,6 +11,7 @@ using UserManagementApi.DTOs.Students;
 using UserManagementApi.DTOs.Subjects;
 using UserManagementApi.DTOs.Teachers;
 using UserManagementApi.DTOs.Trades;
+using UserManagementApi.Models.ErrorModels;
 using UserManagementApi.Services;
 using UserManagementApi.Services.Interfaces;
 
@@ -1250,6 +1251,37 @@ public class AdminController(IAdminService adminService, ITeacherService teacher
 
         return Ok(result.Data);
     }
+
+     [HttpDelete("classes/{classId:guid}/class-teacher")]
+public async Task<IActionResult> UnassignClassTeacher(Guid classId)
+{
+    var schoolId = GetSchoolId();
+
+    if (schoolId == null)
+    {
+        return BadRequest(new { message = "Admin account is not assigned to a school." });
+    }
+
+    var result = await _teacherService.UnassignClassTeacherByClassAsync(schoolId.Value, classId);
+
+    if (!result.Succeeded)
+    {
+        var error = result.Errors?.FirstOrDefault();
+
+        if (error?.Code == ClassTeacherErrorCodes.ClassNotFound)
+        {
+            return NotFound(new { message = error.Message, code = error.Code });
+        }
+
+        return BadRequest(new
+        {
+            message = error?.Message ?? "Unable to unassign class teacher.",
+            code = error?.Code
+        });
+    }
+
+    return Ok(new { message = "Class teacher unassigned successfully." });
+}
 
 
     [HttpDelete("teaching-subjects/{assignmentId:guid}")]

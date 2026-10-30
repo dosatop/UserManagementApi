@@ -6,6 +6,11 @@ public class ServiceError
     public required string Message { get; init; }
 }
 
+public static class ClassTeacherErrorCodes
+{
+    public const string ClassNotFound = "CLASS_NOT_FOUND";
+    public const string NoClassTeacher = "CLASS_NO_CLASS_TEACHER";
+}
 public static class AuthErrorCodes
 {
     public const string InvalidCredentials = "AUTH_INVALID_CREDENTIALS";

@@ -50,6 +50,10 @@ public interface ITeacherService
             Guid teacherId,
             AssignTeachingSubjectRequest request);
 
+            Task<ServiceResult<bool>> UnassignClassTeacherByClassAsync(
+        Guid schoolId,
+        Guid classId);
+
     Task<(bool Success, object? Data, string? Error)>
 GetTeachersAssignedToSubjectAsync(
 Guid schoolId,

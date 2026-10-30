@@ -4,6 +4,7 @@ using UserManagementApi.Data;
 using UserManagementApi.DTOs.Auth.Roles;
 using UserManagementApi.DTOs.Teachers;
 using UserManagementApi.Models;
+using UserManagementApi.Models.ErrorModels;
 using UserManagementApi.Services.Interfaces;
 
 namespace UserManagementApi.Services;
@@ -595,6 +596,41 @@ public class TeacherService(
             null
         );
     }
+   public async Task<ServiceResult<bool>> UnassignClassTeacherByClassAsync(
+    Guid schoolId,
+    Guid classId)
+{
+    var schoolClass = await _context.Classes
+        .FirstOrDefaultAsync(c => c.Id == classId && c.SchoolId == schoolId);
+
+    if (schoolClass == null)
+        return Fail(ClassTeacherErrorCodes.ClassNotFound, "Class not found.");
+
+    var classTeachers = await _context.ClassTeachers
+        .Where(ct => ct.ClassId == classId)
+        .ToListAsync();
+
+    var teacherClasses = await _context.TeacherClasses
+        .Where(tc => tc.ClassId == classId)
+        .ToListAsync();
+
+    if (classTeachers.Count == 0 && teacherClasses.Count == 0)
+        return Fail(ClassTeacherErrorCodes.NoClassTeacher, "This class has no class teacher.");
+
+    _context.ClassTeachers.RemoveRange(classTeachers);
+    _context.TeacherClasses.RemoveRange(teacherClasses);
+
+    await _context.SaveChangesAsync();
+
+    return ServiceResult<bool>.Success(true);
+
+    static ServiceResult<bool> Fail(string code, string message) =>
+        ServiceResult<bool>.Failure(new[]
+        {
+            new ServiceError { Code = code, Message = message }
+        });
+}
+
 
     public async Task<(bool Success, object? Data, string? Error)>
         GetTeachersAssignedToSubjectAsync(
