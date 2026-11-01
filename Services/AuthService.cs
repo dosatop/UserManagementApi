@@ -5,6 +5,7 @@ using UserManagementApi.DTOs.Auth.Roles;
 using UserManagementApi.Models;
 using UserManagementApi.Models.AuthModels;
 using UserManagementApi.Models.ErrorModels;
+using UserManagementApi.Models.SchoolModels;
 
 namespace UserManagementApi.Services;
 
@@ -158,93 +159,231 @@ public class AuthService(
                 }
             });
     }
+    // ================================================================
+    // CREATE STUDENT
+    // ================================================================
+    // Creates the login account (email + password) and the student
+    // profile together. If anything fails, nothing is saved.
+    // ================================================================
 
-    public async Task<ServiceResult<User>> CreateUserAsync(
-        string email,
-        string password,
-        string fullName,
-        string phoneNumber, string? userName)
+    public async Task<(bool Success, object? Data, string? Error)>
+        CreateStudentAsync(
+            Guid schoolId,
+            CreateStudentRequest request)
     {
-        await using var transaction = await _context.Database.BeginTransactionAsync();
+        // ============================================================
+        // CLEAN INPUT
+        // ============================================================
+        // Email is trimmed. Password is NOT trimmed — it must be saved
+        // exactly as typed so login matches.
+
+        var email = request.Email?.Trim() ?? string.Empty;
+        var fullName = request.FullName?.Trim() ?? string.Empty;
+        var studentNumber = request.StudentNumber?.Trim() ?? string.Empty;
+        var password = request.Password ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(fullName))
+            return (false, null, "Full name is required.");
+
+        if (string.IsNullOrWhiteSpace(email))
+            return (false, null, "Email is required.");
+
+        if (string.IsNullOrWhiteSpace(password))
+            return (false, null, "Password is required.");
+
+        if (string.IsNullOrWhiteSpace(studentNumber))
+            return (false, null, "Student number is required.");
+
+        // ============================================================
+        // SCHOOL
+        // ============================================================
+
+        var school = await _context.Schools
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == schoolId);
+
+        if (school == null)
+            return (false, null, "School not found.");
+
+        // ============================================================
+        // CLASS
+        // ============================================================
+
+        var classroom = await _context.Classes
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.Id == request.ClassRoomId &&
+                x.SchoolId == schoolId);
+
+        if (classroom == null)
+            return (false, null, "Class does not belong to this school.");
+
+        // ============================================================
+        // DEPARTMENT
+        // ============================================================
+
+        Department? department = null;
+
+        if (request.DepartmentId.HasValue)
+        {
+            department = await _context.Departments
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x =>
+                    x.Id == request.DepartmentId.Value &&
+                    x.SchoolId == schoolId);
+
+            if (department == null)
+                return (false, null, "Department does not belong to this school.");
+        }
+
+        // Senior students MUST have a department
+        if (classroom.Level == SchoolLevel.Senior &&
+            department == null)
+        {
+            return (false, null, "A department is required for Senior students.");
+        }
+
+        // Junior students CANNOT have a department
+        if (classroom.Level == SchoolLevel.Junior &&
+            department != null)
+        {
+            return (false, null, "Junior students cannot be assigned to a department.");
+        }
+
+        // ============================================================
+        // DUPLICATES
+        // ============================================================
+
+        var studentNumberExists = await _context.StudentProfiles
+            .AnyAsync(x =>
+                x.SchoolId == schoolId &&
+                x.StudentNumber == studentNumber);
+
+        if (studentNumberExists)
+            return (false, null, "A student with this student number already exists in this school.");
+
+        if (await _userManager.FindByEmailAsync(email) != null)
+            return (false, null, "An account with this email already exists.");
+
+        // ============================================================
+        // CREATE LOGIN + PROFILE (one transaction)
+        // ============================================================
+
+        await using var transaction =
+            await _context.Database.BeginTransactionAsync();
+
         try
         {
-            var existingUser = await _userManager.FindByEmailAsync(email);
+            // --------------------------------------------------------
+            // LOGIN ACCOUNT
+            // --------------------------------------------------------
 
-            if (existingUser is not null)
+            var user = new User
             {
-                await transaction.RollbackAsync();
-
-                return ServiceResult<User>.Failure(
-                    [new ServiceError
-                {
-                    Code = AuthErrorCodes.EmailAlreadyRegistered,
-                    Message = "Email already exist"
-                }
-                    ]);
-            }
-
-            User user = new()
-            {
-                UserName = userName ?? email,
+                UserName = email,         // login looks up by email
                 Email = email,
+                EmailConfirmed = true,    // created by the school
                 FullName = fullName,
-                PhoneNumber = phoneNumber,
-                CreatedAt = DateTime.UtcNow,
+                SchoolId = schoolId,
+                CreatedAt = DateTime.UtcNow
             };
 
+            var created = await _userManager.CreateAsync(user, password);
 
-            var result = await _userManager
-                .CreateAsync(user, password);
-
-            if (!result.Succeeded)
+            if (!created.Succeeded)
             {
                 await transaction.RollbackAsync();
 
-                foreach (var error in result.Errors)
-                {
-                    _logger.LogWarning("User creation failed. Code {Code}, Description: {Description}",
-                    error.Code,
-                    error.Description
-                    );
-                }
+                // e.g. "Passwords must have at least one digit."
+                var reason = string.Join(" ",
+                    created.Errors.Select(e => e.Description));
 
-                return ServiceResult<User>.Failure(
-                   [
-                    new ServiceError
-                {
-                    Code = AuthErrorCodes.UserCreationFailed,
-                    Message = "Unable to create user."
-                }
-                   ]);
+                return (false, null, string.IsNullOrWhiteSpace(reason)
+                    ? "Unable to create the student's login."
+                    : reason);
             }
 
-            var roleResult = await _roleService.AssignRoleToUserAsync(user, Roles.Student);
+            var roleResult =
+                await _userManager.AddToRoleAsync(user, Roles.Student);
 
             if (!roleResult.Succeeded)
             {
                 await transaction.RollbackAsync();
-
-                _logger.LogError(
-                    "User {UserId} was created but assigning role {Role} failed",
-                    user.Id,
-                    Roles.Student);
-
-                return ServiceResult<User>.Failure([
-                   new ServiceError{
-                   Code = AuthErrorCodes.UserCreationFailed,
-                   Message = "Unable to assign default role to user"
-               }
-                ]);
+                return (false, null, "Unable to assign the Student role.");
             }
+
+            // --------------------------------------------------------
+            // STUDENT PROFILE
+            // --------------------------------------------------------
+
+            var studentProfile = new StudentProfile
+            {
+                Id = Guid.NewGuid(),
+
+                UserId = user.Id,
+                SchoolId = schoolId,
+
+                StudentNumber = studentNumber,
+
+                ClassId = classroom.Id,
+                SchoolLevel = classroom.Level,
+
+                // Senior = required, Junior = null
+                DepartmentId = department?.Id,
+
+                // Trade is chosen later
+                TradeId = null,
+                TradeSubjectId = null
+            };
+
+            _context.StudentProfiles.Add(studentProfile);
+
+            await _context.SaveChangesAsync();
 
             await transaction.CommitAsync();
 
-            return ServiceResult<User>.Success(user);
+            // ========================================================
+            // RESPONSE
+            // ========================================================
+
+            return (
+                true,
+                new
+                {
+                    studentId = studentProfile.Id,
+                    userId = user.Id,
+
+                    fullName = user.FullName,
+                    studentName = user.FullName,
+                    email = user.Email,
+                    phoneNumber = user.PhoneNumber,
+
+                    studentNumber = studentProfile.StudentNumber,
+
+                    classId = classroom.Id,
+                    className = classroom.Name,
+
+                    schoolLevel = classroom.Level.ToString(),
+                    schoolLevelId = (int)classroom.Level,
+
+                    departmentId = department?.Id,
+                    departmentName = department?.Name,
+
+                    tradeId = (Guid?)null,
+                    tradeName = (string?)null,
+
+                    schoolId = school.Id,
+                    schoolName = school.Name,
+
+                    parentCount = 0
+                },
+                null
+            );
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             await transaction.RollbackAsync();
-            _logger.LogError(ex, "An error occurred while creating user {Email}", email); return ServiceResult<User>.Failure([new ServiceError { Code = AuthErrorCodes.UserCreationFailed, Message = "Unable to create user." }]);
+            return (false, null, "Unable to create student. Please try again.");
         }
     }
 }
