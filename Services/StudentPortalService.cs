@@ -132,45 +132,42 @@ public async Task<(string? Session, string? Term)> GetCurrentPeriodAsync(
         );
     }
 
-    // ============================================================
-    // SUBJECTS
-    // ============================================================
+   // ============================================================
+// SUBJECTS
+// ============================================================
+// Subjects on the student's class that apply to them:
+//   - General subjects (no department, no trade)
+//   - Subjects of the student's department
+//   - Subjects of the student's trade (only their chosen trade
+//     subject if one is set)
+// Each subject includes the teacher who teaches it in this class.
+// ============================================================
 
-    public async Task<(bool Success, object? Data, string? Error)>
-        GetSubjectsAsync(string userId)
-    {
-        var student = await _context.StudentProfiles
-            .AsNoTracking()
-            .Where(x => x.UserId == userId)
-            .Select(x => new
-            {
-                x.Id,
-                x.SchoolId,
-                x.ClassId
-            })
-            .FirstOrDefaultAsync();
-
-        if (student == null)
+public async Task<(bool Success, object? Data, string? Error)>
+    GetSubjectsAsync(string userId)
+{
+    var student = await _context.StudentProfiles
+        .AsNoTracking()
+        .Where(x => x.UserId == userId)
+        .Select(x => new
         {
-            return (
-                false,
-                null,
-                "Student profile not found."
-            );
-        }
+            x.Id,
+            x.SchoolId,
+            x.ClassId,
+            x.DepartmentId,
+            x.TradeId,
+            x.TradeSubjectId
+        })
+        .FirstOrDefaultAsync();
 
-        var subjects = await _context.Subjects
-            .AsNoTracking()
-            .Where(x => x.SchoolId == student.SchoolId)
-            .Select(x => new
-            {
-                x.Id,
-                x.Name,
-                x.SchoolId
-            })
-            .OrderBy(x => x.Name)
-            .ToListAsync();
+    if (student == null)
+    {
+        return (false, null, "Student profile not found.");
+    }
 
+    // Not placed in a class yet.
+    if (student.ClassId == Guid.Empty)
+    {
         return (
             true,
             new
@@ -178,14 +175,105 @@ public async Task<(string? Session, string? Term)> GetCurrentPeriodAsync(
                 StudentId = student.Id,
                 ClassId = student.ClassId,
                 SchoolId = student.SchoolId,
-
-                TotalSubjects = subjects.Count,
-
-                Subjects = subjects
+                TotalSubjects = 0,
+                Subjects = Array.Empty<object>()
             },
             null
         );
     }
+
+    var classId = student.ClassId;
+
+    // ------------------------------------------------------------
+    // 1. Subjects on the class that apply to this student
+    // ------------------------------------------------------------
+    var subjects = await _context.ClassSubjects
+        .AsNoTracking()
+        .Where(cs => cs.ClassId == classId)
+        .Select(cs => cs.Subject)
+        .Where(s => s.SchoolId == student.SchoolId)
+        .Where(s =>
+            // General
+            (s.DepartmentId == null && s.TradeId == null) ||
+
+            // Their department
+            (s.DepartmentId != null && s.DepartmentId == student.DepartmentId) ||
+
+            // Their trade — only the chosen trade subject if one is set
+            (s.TradeId != null &&
+                s.TradeId == student.TradeId &&
+                (student.TradeSubjectId == null || s.Id == student.TradeSubjectId)))
+        .Select(s => new
+        {
+            s.Id,
+            s.Name,
+            s.Code,
+            Type = s.Type.ToString(),
+            s.SchoolId,
+            s.DepartmentId,
+            DepartmentName = s.Department != null ? s.Department.Name : null,
+            s.TradeId,
+            TradeName = s.Trade != null ? s.Trade.Name : null
+        })
+        .Distinct()
+        .OrderBy(s => s.Name)
+        .ToListAsync();
+
+    var subjectIds = subjects.Select(s => s.Id).ToList();
+
+    // ------------------------------------------------------------
+    // 2. Who teaches each subject in THIS class (one query)
+    // ------------------------------------------------------------
+    var teachers = await _context.TeacherSubjects
+        .AsNoTracking()
+        .Where(ts => ts.ClassId == classId && subjectIds.Contains(ts.SubjectId))
+        .Select(ts => new
+        {
+            ts.SubjectId,
+            ts.TeacherId,
+            TeacherName = ts.Teacher.User.FullName,
+            TeacherEmail = ts.Teacher.User.Email
+        })
+        .ToListAsync();
+
+    // ------------------------------------------------------------
+    // 3. Combine
+    // ------------------------------------------------------------
+    var result = subjects.Select(s =>
+    {
+        // Several teachers can share a subject in a class: take the first.
+        var t = teachers.FirstOrDefault(x => x.SubjectId == s.Id);
+
+        return new
+        {
+            s.Id,
+            s.Name,
+            s.Code,
+            s.Type,
+            s.SchoolId,
+            s.DepartmentId,
+            s.DepartmentName,
+            s.TradeId,
+            s.TradeName,
+            TeacherId = t?.TeacherId,
+            TeacherName = t?.TeacherName,
+            TeacherEmail = t?.TeacherEmail
+        };
+    }).ToList();
+
+    return (
+        true,
+        new
+        {
+            StudentId = student.Id,
+            ClassId = classId,
+            SchoolId = student.SchoolId,
+            TotalSubjects = result.Count,
+            Subjects = result
+        },
+        null
+    );
+}
 
     // ============================================================
     // RESULTS
