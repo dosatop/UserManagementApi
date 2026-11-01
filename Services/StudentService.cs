@@ -410,6 +410,9 @@ public class StudentService : IStudentService
 
                 StudentName = x.User.FullName,
 
+                Email = x.User.Email,
+                PhoneNumber = x.User.PhoneNumber,
+
                 // ----------------------------------------------------
                 // CLASS
                 // ----------------------------------------------------
@@ -480,11 +483,19 @@ public class StudentService : IStudentService
     // GET BY ID
     // ================================================================
 
+      // ================================================================
+    // GET BY ID (full profile for the admin student details page)
+    // ================================================================
+
     public async Task<(bool Success, object? Data, string? Error)>
         GetStudentByIdAsync(
             Guid schoolId,
             Guid studentId)
     {
+        // ------------------------------------------------------------
+        // STUDENT
+        // ------------------------------------------------------------
+
         var student = await _context.StudentProfiles
             .AsNoTracking()
             .Where(x =>
@@ -492,20 +503,48 @@ public class StudentService : IStudentService
                 x.SchoolId == schoolId)
             .Select(x => new
             {
-                studentId = x.Id,
-                userId = x.UserId,
+                StudentId = x.Id,
+                x.UserId,
 
-                studentNumber = x.StudentNumber,
+                x.StudentNumber,
 
-                fullName = x.User.FullName,
-                email = x.User.Email,
-                phoneNumber = x.User.PhoneNumber,
+                StudentName = x.User.FullName,
+                Email = x.User.Email,
+                PhoneNumber = x.User.PhoneNumber,
 
-                classId = x.ClassId,
-                className = x.Class.Name,
+                x.ClassId,
+                ClassName = x.Class.Name,
 
-                schoolId = x.SchoolId,
-                schoolName = x.School.Name
+                x.SchoolId,
+                SchoolName = x.School.Name,
+
+                SchoolLevel = x.SchoolLevel.ToString(),
+
+                x.DepartmentId,
+                DepartmentName = x.Department != null
+                    ? x.Department.Name
+                    : null,
+
+                x.TradeId,
+                TradeName = x.Trade != null
+                    ? x.Trade.Name
+                    : null,
+
+                x.TradeSubjectId,
+                TradeSubjectName = _context.Subjects
+                    .Where(s => s.Id == x.TradeSubjectId)
+                    .Select(s => s.Name)
+                    .FirstOrDefault(),
+
+                Parents = x.Parents
+                    .Select(ps => new
+                    {
+                        ParentId = ps.Parent.ParentId,
+                        ParentName = ps.Parent.User.FullName,
+                        Email = ps.Parent.User.Email,
+                        PhoneNumber = ps.Parent.User.PhoneNumber
+                    })
+                    .ToList()
             })
             .FirstOrDefaultAsync();
 
@@ -518,9 +557,179 @@ public class StudentService : IStudentService
             );
         }
 
+        var classId = student.ClassId;
+        Guid? departmentId = student.DepartmentId;
+        Guid? tradeId = student.TradeId;
+        Guid? tradeSubjectId = student.TradeSubjectId;
+
+        // ------------------------------------------------------------
+        // SUBJECTS
+        // ------------------------------------------------------------
+        //   • general subjects of the class
+        //   • subjects of the student's department
+        //   • the student's trade subject (or every subject of their
+        //     trade when no specific one is picked)
+        // ------------------------------------------------------------
+
+        var subjects = await _context.ClassSubjects
+            .AsNoTracking()
+            .Where(cs => cs.ClassId == classId)
+            .Select(cs => cs.Subject)
+            .Where(s =>
+                (s.DepartmentId == null && s.TradeId == null) ||
+                (departmentId != null && s.DepartmentId == departmentId) ||
+                (tradeSubjectId != null && s.Id == tradeSubjectId) ||
+                (tradeSubjectId == null && tradeId != null && s.TradeId == tradeId))
+            .Select(s => new
+            {
+                SubjectId = s.Id,
+                SubjectName = s.Name,
+                Code = s.Code,
+                SubjectType = s.Type.ToString()
+            })
+            .Distinct()
+            .OrderBy(s => s.SubjectName)
+            .ToListAsync();
+
+        var subjectIds = subjects
+            .Select(s => s.SubjectId)
+            .ToList();
+
+        // ------------------------------------------------------------
+        // RESULTS (all sessions/terms, newest first)
+        // ------------------------------------------------------------
+        // Test and exam are never null in the response, so the app
+        // always gets numbers (0 = not entered yet).
+        // ------------------------------------------------------------
+
+        var results = await _context.StudentResults
+            .AsNoTracking()
+            .Where(r =>
+                r.StudentId == studentId &&
+                r.SchoolId == schoolId)
+            .OrderByDescending(r => r.CreatedAt)
+            .Select(r => new
+            {
+                ResultId = r.Id,
+
+                r.SubjectId,
+                SubjectName = r.Subject.Name,
+                SubjectCode = r.Subject.Code,
+
+                r.ClassId,
+                ClassName = r.Class.Name,
+
+                r.Session,
+                r.Term,
+
+                TestScore = r.TestScore ?? 0m,
+                ExamScore = r.ExamScore ?? 0m,
+                r.Score,
+
+                r.Grade,
+                r.GradeRemark,
+                r.Remark,
+
+                r.CreatedAt
+            })
+            .ToListAsync();
+
+        // ------------------------------------------------------------
+        // ASSIGNMENTS
+        // ------------------------------------------------------------
+        // Assignments for the student's class in the subjects they
+        // take, with this student's own submission status.
+        // ------------------------------------------------------------
+
+        var assignments = await _context.Assignments
+            .AsNoTracking()
+            .Where(a =>
+                a.SchoolId == schoolId &&
+                a.ClassId == classId &&
+                subjectIds.Contains(a.SubjectId))
+            .OrderByDescending(a => a.DueDate ?? a.AssignedAt)
+            .Select(a => new
+            {
+                AssignmentId = a.Id,
+
+                a.Title,
+                a.Description,
+                a.AttachmentUrl,
+
+                a.SubjectId,
+                SubjectName = a.Subject.Name,
+
+                a.TeacherId,
+                TeacherName = a.Teacher.User.FullName,
+
+                a.Session,
+                a.Term,
+
+                a.AssignedAt,
+                a.DueDate,
+                a.IsPublished,
+
+                // This student's submission
+                IsSubmitted = a.Submissions.Any(s =>
+                    s.StudentId == studentId &&
+                    s.SubmittedAt != null),
+
+                SubmittedAt = a.Submissions
+                    .Where(s => s.StudentId == studentId)
+                    .Select(s => s.SubmittedAt)
+                    .FirstOrDefault(),
+
+                IsGraded = a.Submissions.Any(s =>
+                    s.StudentId == studentId &&
+                    s.IsGraded),
+
+                SubmissionScore = a.Submissions
+                    .Where(s => s.StudentId == studentId)
+                    .Select(s => s.Score)
+                    .FirstOrDefault()
+            })
+            .ToListAsync();
+
+        // ------------------------------------------------------------
+        // RESPONSE
+        // ------------------------------------------------------------
+
         return (
             true,
-            student,
+            new
+            {
+                student.StudentId,
+                student.UserId,
+                student.StudentNumber,
+
+                student.StudentName,
+                FullName = student.StudentName, // old key, kept for safety
+
+                student.Email,
+                student.PhoneNumber,
+
+                student.ClassId,
+                student.ClassName,
+
+                student.SchoolId,
+                student.SchoolName,
+                student.SchoolLevel,
+
+                student.DepartmentId,
+                student.DepartmentName,
+
+                student.TradeId,
+                student.TradeName,
+
+                student.TradeSubjectId,
+                student.TradeSubjectName,
+
+                student.Parents,
+
+                Subjects = subjects,
+                Results = results,
+                Assignments = assignments
+            },
             null
         );
     }
