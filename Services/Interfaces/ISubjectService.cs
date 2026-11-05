@@ -27,4 +27,11 @@ public interface ISubjectService
         DeleteSubjectAsync(
             Guid schoolId,
             Guid subjectId);
+
+            Task<(bool Success, object? Data, string? Error)>
+    AssignSubjectToMultipleClassesAsync(
+        Guid schoolId,
+        Guid subjectId,
+        List<Guid> classIds,
+        Guid? teacherId);
 }

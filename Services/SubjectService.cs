@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using UserManagementApi.Data;
 using UserManagementApi.DTOs.Subjects;
 using UserManagementApi.Models;
+using UserManagementApi.Models.Assignments;
 using UserManagementApi.Services.Interfaces;
 
 namespace UserManagementApi.Services;
@@ -534,4 +535,217 @@ public class SubjectService : ISubjectService
 
         return (true, null);
     }
+
+    public async Task<(bool Success, object? Data, string? Error)>
+    AssignSubjectToMultipleClassesAsync(
+        Guid schoolId,
+        Guid subjectId,
+        List<Guid> classIds,
+        Guid? teacherId)
+{
+    // ========================================================
+    // VALIDATE INPUT
+    // ========================================================
+
+    if (classIds == null || classIds.Count == 0)
+    {
+        return (false, null, "Please select at least one class.");
+    }
+
+    var uniqueClassIds = classIds
+        .Where(x => x != Guid.Empty)
+        .Distinct()
+        .ToList();
+
+    if (uniqueClassIds.Count == 0)
+    {
+        return (false, null, "No valid class IDs provided.");
+    }
+
+    // ========================================================
+    // VALIDATE SUBJECT
+    // ========================================================
+
+    var subject = await _context.Subjects
+        .FirstOrDefaultAsync(x =>
+            x.Id == subjectId &&
+            x.SchoolId == schoolId);
+
+    if (subject == null)
+    {
+        return (false, null, "Subject not found in this school.");
+    }
+
+    // ========================================================
+    // VALIDATE CLASSES
+    // ========================================================
+
+    var classrooms = await _context.Classes
+        .Where(x =>
+            uniqueClassIds.Contains(x.Id) &&
+            x.SchoolId == schoolId)
+        .ToListAsync();
+
+    if (classrooms.Count != uniqueClassIds.Count)
+    {
+        return (
+            false,
+            null,
+            "One or more selected classes were not found in this school."
+        );
+    }
+
+    // ========================================================
+    // VALIDATE OPTIONAL TEACHER
+    // ========================================================
+
+    if (teacherId.HasValue)
+    {
+        var teacherExists = await _context.Teachers
+            .AnyAsync(x =>
+                x.Id == teacherId.Value &&
+                x.SchoolId == schoolId);
+
+        if (!teacherExists)
+        {
+            return (false, null, "Teacher not found in this school.");
+        }
+    }
+
+    // ========================================================
+    // DATABASE TRANSACTION
+    // ========================================================
+
+    await using var transaction =
+        await _context.Database.BeginTransactionAsync();
+
+    try
+    {
+        // ====================================================
+        // FIND EXISTING CLASS-SUBJECT ASSIGNMENTS
+        // ====================================================
+
+        var existingClassIds = await _context.ClassSubjects
+            .Where(x =>
+                x.SchoolId == schoolId &&
+                x.SubjectId == subjectId &&
+                uniqueClassIds.Contains(x.ClassId))
+            .Select(x => x.ClassId)
+            .ToListAsync();
+
+        var existingClassIdSet = existingClassIds.ToHashSet();
+
+        // ====================================================
+        // CREATE MISSING CLASS-SUBJECT ASSIGNMENTS
+        // ====================================================
+
+        var newClassAssignments = classrooms
+            .Where(x => !existingClassIdSet.Contains(x.Id))
+            .Select(x => new ClassSubject
+            {
+                Id = Guid.NewGuid(),
+                SchoolId = schoolId,
+                ClassId = x.Id,
+                SubjectId = subjectId
+            })
+            .ToList();
+
+        if (newClassAssignments.Count > 0)
+        {
+            _context.ClassSubjects.AddRange(newClassAssignments);
+        }
+
+        // ====================================================
+        // OPTIONAL TEACHER ASSIGNMENT
+        // ====================================================
+
+        var newTeacherAssignments = 0;
+
+        if (teacherId.HasValue)
+        {
+            var existingTeacherClassIds =
+                await _context.TeacherSubjects
+                    .Where(x =>
+                        x.SchoolId == schoolId &&
+                        x.TeacherId == teacherId.Value &&
+                        x.SubjectId == subjectId &&
+                        uniqueClassIds.Contains(x.ClassId))
+                    .Select(x => x.ClassId)
+                    .ToListAsync();
+
+            var existingTeacherClassIdSet =
+                existingTeacherClassIds.ToHashSet();
+
+            var teacherAssignments = classrooms
+                .Where(x => !existingTeacherClassIdSet.Contains(x.Id))
+                .Select(x => new TeacherSubject
+                {
+                    Id = Guid.NewGuid(),
+                    SchoolId = schoolId,
+                    TeacherId = teacherId.Value,
+                    SubjectId = subjectId,
+                    ClassId = x.Id
+                })
+                .ToList();
+
+            if (teacherAssignments.Count > 0)
+            {
+                _context.TeacherSubjects.AddRange(teacherAssignments);
+            }
+
+            newTeacherAssignments = teacherAssignments.Count;
+        }
+
+        // ====================================================
+        // SAVE EVERYTHING
+        // ====================================================
+
+        await _context.SaveChangesAsync();
+
+        await transaction.CommitAsync();
+
+        // ====================================================
+        // RESPONSE
+        // ====================================================
+
+        return (
+            true,
+            new
+            {
+                subjectId = subject.Id,
+                subjectName = subject.Name,
+
+                teacherId,
+
+                totalClassesRequested = uniqueClassIds.Count,
+
+                totalClassAssignmentsCreated =
+                    newClassAssignments.Count,
+
+                totalClassesAlreadyAssigned =
+                    existingClassIds.Count,
+
+                totalTeacherAssignmentsCreated =
+                    newTeacherAssignments,
+
+                classes = classrooms.Select(x => new
+                {
+                    classId = x.Id,
+                    className = x.Name
+                }),
+
+                message = teacherId.HasValue
+                    ? "Subject and teacher assignments completed successfully."
+                    : "Subject assigned to classes successfully."
+            },
+            null
+        );
+    }
+    catch (Exception)
+    {
+        await transaction.RollbackAsync();
+
+        throw;
+    }
+}
 }

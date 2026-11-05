@@ -4548,9 +4548,9 @@ public async Task<(bool Success, object? Data, string? Error)>
         return (false, null, "Assignment not found.");
     }
 
-    if (request.Score < 0 || request.Score > 10)
+    if (request.Score < 0 || request.Score > 100)
     {
-        return (false, null, "Score must be between 0 and 10.");
+        return (false, null, "Score must be between 0 and 100.");
     }
 
     var submission = await _context.AssignmentSubmissions

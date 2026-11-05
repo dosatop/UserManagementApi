@@ -907,6 +907,46 @@ public class AdminController(IAdminService adminService, ITeacherService teacher
     }
 
     // ================================================================
+// ASSIGN SUBJECT TO MULTIPLE CLASSES (OPTIONAL TEACHER)
+// ===// ================================================================
+// ASSIGN SUBJECT TO MULTIPLE CLASSES (OPTIONAL TEACHER)
+// ================================================================
+
+[HttpPost("subjects/{subjectId:guid}/assign-multiple-classes")]
+public async Task<IActionResult> AssignSubjectToMultipleClasses(
+    Guid subjectId,
+    [FromBody] AssignSubjectToClassesRequest request)
+{
+    var schoolId = GetSchoolId();
+
+    if (schoolId == null)
+    {
+        return BadRequest(new
+        {
+            message = "Admin account is not assigned to a school."
+        });
+    }
+
+    var result = await _subjectService
+        .AssignSubjectToMultipleClassesAsync(
+            schoolId.Value,
+            subjectId,
+            request.ClassIds,
+            request.TeacherId
+        );
+
+    if (!result.Success)
+    {
+        return BadRequest(new
+        {
+            message = result.Error
+        });
+    }
+
+    return Ok(result.Data);
+}
+
+    // ================================================================
     // CREATE PARENTS
     // ================================================================
     [HttpPost("parents")]
