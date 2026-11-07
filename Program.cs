@@ -99,6 +99,7 @@ builder.Services.AddScoped<IStudentService, StudentService>();
 builder.Services.AddScoped<ITeacherService, TeacherService>();
 builder.Services.AddScoped<IUserManagementService, UserManagementService>();
 builder.Services.AddScoped<ICurrentUserService, UserService>();
+builder.Services.AddScoped<ISuperAdminService, SuperAdminService>();
 builder.Services.AddScoped<
     ITeacherClassService,
     TeacherClassService>();
