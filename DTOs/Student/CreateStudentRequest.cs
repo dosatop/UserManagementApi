@@ -10,5 +10,7 @@ public class CreateStudentRequest
 
     public Guid? DepartmentId { get; set; }
     public Guid? TradeId { get; set; }
+
+public Guid? TradeSubjectId { get; set; }
     public Guid ClassRoomId { get; set; }
 }

@@ -29,7 +29,7 @@ public class StudentService : IStudentService
     // CREATE
     // ================================================================
 
-    public async Task<(bool Success, object? Data, string? Error)>
+      public async Task<(bool Success, object? Data, string? Error)>
        CreateStudentAsync(
            Guid schoolId,
            CreateStudentRequest request)
@@ -43,11 +43,7 @@ public class StudentService : IStudentService
 
         if (school == null)
         {
-            return (
-                false,
-                null,
-                "School not found."
-            );
+            return (false, null, "School not found.");
         }
 
         // ============================================================
@@ -61,11 +57,7 @@ public class StudentService : IStudentService
 
         if (classroom == null)
         {
-            return (
-                false,
-                null,
-                "Class does not belong to this school."
-            );
+            return (false, null, "Class does not belong to this school.");
         }
 
         // ============================================================
@@ -83,49 +75,65 @@ public class StudentService : IStudentService
 
             if (department == null)
             {
-                return (
-                    false,
-                    null,
-                    "Department does not belong to this school."
-                );
+                return (false, null, "Department does not belong to this school.");
             }
         }
-
-        // ============================================================
-        // VALIDATE DEPARTMENT BASED ON SCHOOL LEVEL
-        // ============================================================
 
         // Senior students MUST have a department
         if (classroom.Level == SchoolLevel.Senior &&
             !request.DepartmentId.HasValue)
         {
-            return (
-                false,
-                null,
-                "A department is required for Senior students."
-            );
+            return (false, null, "A department is required for Senior students.");
         }
 
         // Junior students CANNOT have a department
         if (classroom.Level == SchoolLevel.Junior &&
             request.DepartmentId.HasValue)
         {
-            return (
-                false,
-                null,
-                "Junior students cannot be assigned to a department."
-            );
+            return (false, null, "Junior students cannot be assigned to a department.");
         }
 
         // ============================================================
-        // TRADE
+        // TRADE (optional, Junior and Senior)
         // ============================================================
+        // • TradeId alone            → student is on that trade
+        // • TradeId + TradeSubjectId → also their specific trade subject
+        // • TradeSubjectId must belong to the chosen trade
 
-        // Trade is optional for BOTH Junior and Senior students.
-        // Do NOT assign a trade during student creation.
-        //
-        // The student can choose a trade later through a separate
-        // trade-assignment operation.
+        Trade? trade = null;
+        Subject? tradeSubject = null;
+
+        if (request.TradeSubjectId.HasValue && !request.TradeId.HasValue)
+        {
+            return (false, null, "Select a trade before selecting a trade subject.");
+        }
+
+        if (request.TradeId.HasValue)
+        {
+            trade = await _context.Trades
+                .FirstOrDefaultAsync(x =>
+                    x.Id == request.TradeId.Value &&
+                    x.SchoolId == schoolId);
+
+            if (trade == null)
+            {
+                return (false, null, "Trade does not belong to this school.");
+            }
+
+            if (request.TradeSubjectId.HasValue)
+            {
+                tradeSubject = await _context.Subjects
+                    .FirstOrDefaultAsync(x =>
+                        x.Id == request.TradeSubjectId.Value &&
+                        x.SchoolId == schoolId &&
+                        x.TradeId == trade.Id);
+
+                if (tradeSubject == null)
+                {
+                    return (false, null, "The selected trade subject does not belong to this trade.");
+                }
+            }
+        }
 
         // ============================================================
         // STUDENT NUMBER
@@ -138,11 +146,7 @@ public class StudentService : IStudentService
 
         if (studentNumberExists)
         {
-            return (
-                false,
-                null,
-                "A student with this student number already exists in this school."
-            );
+            return (false, null, "A student with this student number already exists in this school.");
         }
 
         // ============================================================
@@ -160,11 +164,7 @@ public class StudentService : IStudentService
 
         if (!Success)
         {
-            return (
-                false,
-                null,
-                Error
-            );
+            return (false, null, Error);
         }
 
         var user = User!;
@@ -178,22 +178,19 @@ public class StudentService : IStudentService
             Id = Guid.NewGuid(),
 
             UserId = user.Id,
-
             SchoolId = schoolId,
 
             StudentNumber = request.StudentNumber,
 
             ClassId = request.ClassRoomId,
-
-            // Get level directly from the class
             SchoolLevel = classroom.Level,
 
-            // Senior = required
-            // Junior = null
+            // Senior = required, Junior = null
             DepartmentId = department?.Id,
 
-            // Trade is optional and NOT selected during creation
-            TradeId = null
+            // Optional
+            TradeId = trade?.Id,
+            TradeSubjectId = tradeSubject?.Id
         };
 
         _context.StudentProfiles.Add(studentProfile);
@@ -226,9 +223,11 @@ public class StudentService : IStudentService
                 departmentId = department?.Id,
                 departmentName = department?.Name,
 
-                // No trade during creation
-                tradeId = (Guid?)null,
-                tradeName = (string?)null,
+                tradeId = trade?.Id,
+                tradeName = trade?.Name,
+
+                tradeSubjectId = tradeSubject?.Id,
+                tradeSubjectName = tradeSubject?.Name,
 
                 schoolId = school.Id,
                 schoolName = school.Name
