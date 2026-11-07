@@ -54,4 +54,8 @@ public interface ISuperAdminService
     Task<SuperAdminResult> CreateSchoolClassAsync(
         Guid schoolId,
         SuperAdminCreateClassRequest request);
+
+    // ---- Form options (Add student form) ----------------------------
+    // Departments, trades and each trade's subjects.
+    Task<SuperAdminResult> GetSchoolFormOptionsAsync(Guid schoolId);
 }

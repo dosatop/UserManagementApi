@@ -21,6 +21,8 @@ namespace UserManagementApi.Controllers;
 //   GET  api/super-admin/schools/{schoolId}/classes
 //   POST api/super-admin/schools/{schoolId}/classes
 //
+//   GET  api/super-admin/schools/{schoolId}/options    (departments + trades)
+//
 // Thin: all business logic lives in SuperAdminService.
 
 [ApiController]
@@ -84,6 +86,14 @@ public class SuperAdminController(ISuperAdminService superAdminService)
         Guid schoolId,
         SuperAdminCreateClassRequest request) =>
         ToResponse(await _service.CreateSchoolClassAsync(schoolId, request));
+
+    // ================================================================
+    // FORM OPTIONS (Add student form)
+    // ================================================================
+
+    [HttpGet("options")]
+    public async Task<IActionResult> GetSchoolFormOptions(Guid schoolId) =>
+        ToResponse(await _service.GetSchoolFormOptionsAsync(schoolId));
 
     // ================================================================
     // RESULT → HTTP
