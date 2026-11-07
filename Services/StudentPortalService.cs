@@ -506,8 +506,12 @@ public async Task<(bool Success, object? Data, string? Error)>
         );
     }
 
-    // ============================================================
+     // ============================================================
     // ASSIGNMENTS
+    // ============================================================
+    // Only assignments for subjects the student actually takes —
+    // a Livestock assignment given to Year 11 is not shown to an
+    // Art student in Year 11.
     // ============================================================
 
     public async Task<(bool Success, object? Data, string? Error)>
@@ -530,12 +534,10 @@ public async Task<(bool Success, object? Data, string? Error)>
 
         if (student == null)
         {
-            return (
-                false,
-                null,
-                "Student profile not found."
-            );
+            return (false, null, "Student profile not found.");
         }
+
+        var subjectIds = await _context.GetStudentSubjectIdsAsync(student.Id);
 
         var assignments = await _context.Assignments
             .AsNoTracking()
@@ -544,7 +546,8 @@ public async Task<(bool Success, object? Data, string? Error)>
                 x.SchoolId == student.SchoolId &&
                 x.Session == session &&
                 x.Term == term &&
-                x.IsPublished)
+                x.IsPublished &&
+                subjectIds.Contains(x.SubjectId))
             .OrderByDescending(x => x.AssignedAt)
             .Select(x => new
             {
@@ -566,7 +569,6 @@ public async Task<(bool Success, object? Data, string? Error)>
                 SubjectName = x.Subject.Name,
 
                 TeacherId = x.TeacherId,
-
                 TeacherName = x.Teacher.User.FullName,
 
                 Submission = x.Submissions
@@ -634,12 +636,10 @@ public async Task<(bool Success, object? Data, string? Error)>
 
         if (student == null)
         {
-            return (
-                false,
-                null,
-                "Student profile not found."
-            );
+            return (false, null, "Student profile not found.");
         }
+
+        var subjectIds = await _context.GetStudentSubjectIdsAsync(student.Id);
 
         var assignment = await _context.Assignments
             .AsNoTracking()
@@ -647,7 +647,8 @@ public async Task<(bool Success, object? Data, string? Error)>
                 x.Id == assignmentId &&
                 x.ClassId == student.ClassId &&
                 x.SchoolId == student.SchoolId &&
-                x.IsPublished)
+                x.IsPublished &&
+                subjectIds.Contains(x.SubjectId))
             .Select(x => new
             {
                 x.Id,
@@ -668,7 +669,6 @@ public async Task<(bool Success, object? Data, string? Error)>
                 SubjectName = x.Subject.Name,
 
                 TeacherId = x.TeacherId,
-
                 TeacherName = x.Teacher.User.FullName,
 
                 Submission = x.Submissions
@@ -694,18 +694,10 @@ public async Task<(bool Success, object? Data, string? Error)>
 
         if (assignment == null)
         {
-            return (
-                false,
-                null,
-                "Assignment not found."
-            );
+            return (false, null, "Assignment not found.");
         }
 
-        return (
-            true,
-            assignment,
-            null
-        );
+        return (true, assignment, null);
     }
 
     // ============================================================
