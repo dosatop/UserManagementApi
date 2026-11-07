@@ -35,6 +35,40 @@ private Task<bool> TeachesSubjectInClassAsync(
             x.ClassId == classId &&
             x.SubjectId == subjectId);
 }
+
+    // ================================================================
+    // DOES A STUDENT TAKE THIS SUBJECT?
+    // ================================================================
+    //   general    → everyone in the class
+    //   department → students in that department
+    //   trade      → their exact trade subject, or (if none picked)
+    //                any subject of their trade
+    // ================================================================
+
+    private static bool StudentTakesSubject(
+        Guid subjectId,
+        Guid? subjectDepartmentId,
+        Guid? subjectTradeId,
+        Guid? studentDepartmentId,
+        Guid? studentTradeId,
+        Guid? studentTradeSubjectId)
+    {
+        if (subjectDepartmentId == null && subjectTradeId == null)
+            return true;
+
+        if (subjectDepartmentId != null &&
+            subjectDepartmentId == studentDepartmentId)
+            return true;
+
+        if (subjectTradeId != null)
+        {
+            return studentTradeSubjectId != null
+                ? subjectId == studentTradeSubjectId
+                : subjectTradeId == studentTradeId;
+        }
+
+        return false;
+    }
  
 /// <summary>
 /// True when the teacher is the class teacher of this class.
@@ -190,406 +224,514 @@ private async Task<bool> IsClassTeacherAsync(Guid teacherId, Guid classId)
     }
 
 
-    public async Task<(bool Success, object? Data, string? Error)>
-    GetStudentsAsync(
-        string userId,
-        Guid? classId = null)
-{
-    // ------------------------------------------------------------
-    // GET TEACHER
-    // ------------------------------------------------------------
-
-    var teacher = await _context.Teachers
-        .AsNoTracking()
-        .FirstOrDefaultAsync(x => x.UserId == userId);
-
-    if (teacher == null)
+        public async Task<(bool Success, object? Data, string? Error)>
+        GetStudentsAsync(
+            string userId,
+            Guid? classId = null,
+            Guid? subjectId = null)
     {
-        return (false, null, "Teacher profile not found.");
+        // ------------------------------------------------------------
+        // GET TEACHER
+        // ------------------------------------------------------------
+
+        var teacher = await _context.Teachers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.UserId == userId);
+
+        if (teacher == null)
+            return (false, null, "Teacher profile not found.");
+
+        // ------------------------------------------------------------
+        // CLASSES WHERE I'M CLASS TEACHER
+        // ------------------------------------------------------------
+
+        var classTeacherClassIds = await _context.TeacherClasses
+            .AsNoTracking()
+            .Where(x =>
+                x.TeacherId == teacher.Id &&
+                x.Class.SchoolId == teacher.SchoolId)
+            .Select(x => x.ClassId)
+            .Union(
+                _context.ClassTeachers
+                    .AsNoTracking()
+                    .Where(x =>
+                        x.TeacherId == teacher.Id &&
+                        x.Class.SchoolId == teacher.SchoolId)
+                    .Select(x => x.ClassId))
+            .ToListAsync();
+
+        // ------------------------------------------------------------
+        // SUBJECTS I TEACH, PER CLASS
+        // ------------------------------------------------------------
+
+        var teaching = await _context.TeacherSubjects
+            .AsNoTracking()
+            .Where(x =>
+                x.TeacherId == teacher.Id &&
+                x.SchoolId == teacher.SchoolId &&
+                (subjectId == null || x.SubjectId == subjectId))
+            .Select(x => new
+            {
+                x.ClassId,
+                x.SubjectId,
+                SubjectName = x.Subject.Name,
+                x.Subject.DepartmentId,
+                x.Subject.TradeId
+            })
+            .ToListAsync();
+
+        // When filtering by subject, only that subject's classes count.
+        var allowedClassIds = (subjectId == null
+                ? classTeacherClassIds.Concat(teaching.Select(t => t.ClassId))
+                : teaching.Select(t => t.ClassId))
+            .ToHashSet();
+
+        // ------------------------------------------------------------
+        // VERIFY CLASS FILTER
+        // ------------------------------------------------------------
+
+        if (classId.HasValue && !allowedClassIds.Contains(classId.Value))
+        {
+            return (
+                false,
+                null,
+                subjectId == null
+                    ? "You are not the class teacher or a subject teacher of this class."
+                    : "You don't teach this subject in this class."
+            );
+        }
+
+        var targetClassIds = classId.HasValue
+            ? new List<Guid> { classId.Value }
+            : allowedClassIds.ToList();
+
+        // ------------------------------------------------------------
+        // CANDIDATES (everyone in those classes)
+        // ------------------------------------------------------------
+
+        var candidates = await _context.StudentProfiles
+            .AsNoTracking()
+            .Where(s =>
+                s.SchoolId == teacher.SchoolId &&
+                targetClassIds.Contains(s.ClassId))
+            .Select(s => new
+            {
+                studentId = s.Id,
+                studentName = s.User.FullName,
+                studentNumber = s.StudentNumber,
+
+                email = s.User.Email,
+                phoneNumber = s.User.PhoneNumber,
+
+                classId = s.ClassId,
+                className = s.Class.Name,
+
+                schoolId = s.SchoolId,
+
+                s.DepartmentId,
+                s.TradeId,
+                s.TradeSubjectId
+            })
+            .ToListAsync();
+
+        // ------------------------------------------------------------
+        // KEEP ONLY STUDENTS I ACTUALLY TEACH
+        // ------------------------------------------------------------
+        // • My class (as class teacher) → everyone
+        // • Otherwise → only if they take a subject I teach there
+
+        var students = candidates
+            .Select(s =>
+            {
+                var isClassStudent =
+                    subjectId == null &&
+                    classTeacherClassIds.Contains(s.classId);
+
+                var subjectsITeach = teaching
+                    .Where(t =>
+                        t.ClassId == s.classId &&
+                        StudentTakesSubject(
+                            t.SubjectId,
+                            t.DepartmentId,
+                            t.TradeId,
+                            s.DepartmentId,
+                            s.TradeId,
+                            s.TradeSubjectId))
+                    .Select(t => t.SubjectName)
+                    .Distinct()
+                    .OrderBy(n => n)
+                    .ToList();
+
+                return new
+                {
+                    s.studentId,
+                    s.studentName,
+                    s.studentNumber,
+                    s.email,
+                    s.phoneNumber,
+                    s.classId,
+                    s.className,
+                    s.schoolId,
+
+                    isClassStudent,
+                    subjectsITeach
+                };
+            })
+            .Where(s => s.isClassStudent || s.subjectsITeach.Count > 0)
+            .OrderBy(s => s.className)
+            .ThenBy(s => s.studentName)
+            .ToList();
+
+        // ------------------------------------------------------------
+        // RESULT
+        // ------------------------------------------------------------
+
+        return (
+            true,
+            new
+            {
+                studentCount = students.Count,
+
+                classId,
+                subjectId,
+
+                isClassTeacher = classId.HasValue
+                    ? classTeacherClassIds.Contains(classId.Value)
+                    : (bool?)null,
+
+                students
+            },
+            null
+        );
     }
 
-    // ------------------------------------------------------------
-    // CLASSES THIS TEACHER CAN SEE
-    // ------------------------------------------------------------
-    // 1. Class teacher (TeacherClasses or ClassTeachers) — no
-    //    subject in the class is needed.
-    // 2. Subject teacher assigned to the class directly.
-    // 3. Subject teacher with no class on the assignment, where the
-    //    class offers that subject (ClassSubjects).
+      public async Task<(bool Success, object? Data, string? Error)>
+        GetStudentDetailsAsync(
+            string userId,
+            Guid studentId)
+    {
+        // ============================================================
+        // GET TEACHER
+        // ============================================================
 
-    var classTeacherClassIds = await _context.TeacherClasses
-        .AsNoTracking()
-        .Where(x =>
-            x.TeacherId == teacher.Id &&
-            x.Class.SchoolId == teacher.SchoolId)
-        .Select(x => x.ClassId)
-        .Union(
-            _context.ClassTeachers
+        var teacher = await _context.Teachers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.UserId == userId);
+
+        if (teacher == null)
+            return (false, null, "Teacher profile not found.");
+
+        // ============================================================
+        // GET STUDENT
+        // ============================================================
+
+        var profile = await _context.StudentProfiles
+            .AsNoTracking()
+            .Where(x =>
+                x.Id == studentId &&
+                x.SchoolId == teacher.SchoolId)
+            .Select(x => new
+            {
+                studentId = x.Id,
+                studentName = x.User.FullName,
+                studentNumber = x.StudentNumber,
+
+                email = x.User.Email,
+                phoneNumber = x.User.PhoneNumber,
+
+                classId = x.ClassId,
+                className = x.Class.Name,
+
+                schoolId = x.SchoolId,
+
+                x.DepartmentId,
+                DepartmentName = x.Department != null ? x.Department.Name : null,
+                x.TradeId,
+                TradeName = x.Trade != null ? x.Trade.Name : null,
+                x.TradeSubjectId
+            })
+            .FirstOrDefaultAsync();
+
+        if (profile == null)
+            return (false, null, "Student not found.");
+
+        // Same shape as before for the app.
+        var student = new
+        {
+            profile.studentId,
+            profile.studentName,
+            profile.studentNumber,
+            profile.email,
+            profile.phoneNumber,
+            profile.classId,
+            profile.className,
+            profile.schoolId,
+            departmentName = profile.DepartmentName,
+            tradeName = profile.TradeName
+        };
+
+        // ============================================================
+        // SUBJECTS THE STUDENT ACTUALLY TAKES
+        // ============================================================
+
+        var classSubjects = await _context.ClassSubjects
+            .AsNoTracking()
+            .Where(cs => cs.ClassId == profile.classId)
+            .Select(cs => new
+            {
+                cs.SubjectId,
+                cs.Subject.DepartmentId,
+                cs.Subject.TradeId
+            })
+            .ToListAsync();
+
+        var studentSubjectIds = classSubjects
+            .Where(s => StudentTakesSubject(
+                s.SubjectId,
+                s.DepartmentId,
+                s.TradeId,
+                profile.DepartmentId,
+                profile.TradeId,
+                profile.TradeSubjectId))
+            .Select(s => s.SubjectId)
+            .Distinct()
+            .ToList();
+
+        // ============================================================
+        // TEACHER'S ROLE
+        // ============================================================
+
+        var isClassTeacher =
+            await _context.TeacherClasses
+                .AsNoTracking()
+                .AnyAsync(x =>
+                    x.TeacherId == teacher.Id &&
+                    x.ClassId == profile.classId)
+            ||
+            await _context.ClassTeachers
+                .AsNoTracking()
+                .AnyAsync(x =>
+                    x.TeacherId == teacher.Id &&
+                    x.ClassId == profile.classId);
+
+        // Subjects I teach in this class THAT THIS STUDENT TAKES
+        var teacherClassSubjects = (await _context.TeacherSubjects
                 .AsNoTracking()
                 .Where(x =>
                     x.TeacherId == teacher.Id &&
-                    x.Class.SchoolId == teacher.SchoolId)
-                .Select(x => x.ClassId))
-        .ToListAsync();
-
-   var subjectClassIds = await _context.TeacherSubjects
-    .AsNoTracking()
-    .Where(x =>
-        x.TeacherId == teacher.Id &&
-        x.SchoolId == teacher.SchoolId)
-    .Select(x => x.ClassId)
-    .Distinct()
-    .ToListAsync();
-
-    var allowedClassIds = classTeacherClassIds
-        .Union(subjectClassIds)
-        .ToHashSet();
-
-    // ------------------------------------------------------------
-    // VERIFY CLASS FILTER
-    // ------------------------------------------------------------
-
-    if (classId.HasValue && !allowedClassIds.Contains(classId.Value))
-    {
-        return (
-            false,
-            null,
-            "You are not the class teacher or a subject teacher of this class."
-        );
-    }
-
-    var targetClassIds = classId.HasValue
-        ? new List<Guid> { classId.Value }
-        : allowedClassIds.ToList();
-
-    // ------------------------------------------------------------
-    // GET STUDENTS
-    // ------------------------------------------------------------
-
-    var students = await _context.StudentProfiles
-        .AsNoTracking()
-        .Where(student =>
-            student.SchoolId == teacher.SchoolId &&
-            targetClassIds.Contains(student.ClassId))
-        .Select(student => new
-        {
-            studentId = student.Id,
-            studentName = student.User.FullName,
-            studentNumber = student.StudentNumber,
-
-            email = student.User.Email,
-            phoneNumber = student.User.PhoneNumber,
-
-            classId = student.ClassId,
-            className = student.Class.Name,
-
-            schoolId = student.SchoolId
-        })
-        .OrderBy(student => student.className)
-        .ThenBy(student => student.studentName)
-        .ToListAsync();
-
-    // ------------------------------------------------------------
-    // RESULT
-    // ------------------------------------------------------------
-
-    return (
-        true,
-        new
-        {
-            studentCount = students.Count,
-
-            classId,
-
-            // True when the teacher is the class teacher of the
-            // filtered class (null when no class filter was given).
-            isClassTeacher = classId.HasValue
-                ? classTeacherClassIds.Contains(classId.Value)
-                : (bool?)null,
-
-            students
-        },
-        null
-    );
-}
-
-   public async Task<(bool Success, object? Data, string? Error)>
-    GetStudentDetailsAsync(
-        string userId,
-        Guid studentId)
-{
-    // ============================================================
-    // GET TEACHER
-    // ============================================================
-
-    var teacher = await _context.Teachers
-        .AsNoTracking()
-        .FirstOrDefaultAsync(x => x.UserId == userId);
-
-    if (teacher == null)
-    {
-        return (false, null, "Teacher profile not found.");
-    }
-
-    // ============================================================
-    // GET STUDENT
-    // ============================================================
-
-    var student = await _context.StudentProfiles
-        .AsNoTracking()
-        .Where(x =>
-            x.Id == studentId &&
-            x.SchoolId == teacher.SchoolId)
-        .Select(x => new
-        {
-            studentId = x.Id,
-            studentName = x.User.FullName,
-            studentNumber = x.StudentNumber,
-
-            email = x.User.Email,
-            phoneNumber = x.User.PhoneNumber,
-
-            classId = x.ClassId,
-            className = x.Class.Name,
-
-            schoolId = x.SchoolId
-        })
-        .FirstOrDefaultAsync();
-
-    if (student == null)
-    {
-        return (false, null, "Student not found.");
-    }
-
-    // ============================================================
-    // TEACHER'S ROLE IN THIS CLASS
-    // ============================================================
-    // Access is allowed when the teacher is:
-    //   • the class teacher of the student's class, and/or
-    //   • a subject teacher in the student's class.
-
-    var isClassTeacher =
-        await _context.TeacherClasses
-            .AsNoTracking()
-            .AnyAsync(x =>
-                x.TeacherId == teacher.Id &&
-                x.ClassId == student.classId)
-        ||
-        await _context.ClassTeachers
-            .AsNoTracking()
-            .AnyAsync(x =>
-                x.TeacherId == teacher.Id &&
-                x.ClassId == student.classId);
-
-    var teacherClassSubjects = await _context.TeacherSubjects
-        .AsNoTracking()
-        .Where(x =>
-            x.TeacherId == teacher.Id &&
-            x.SchoolId == teacher.SchoolId &&
-            x.ClassId == student.classId)
-        .Select(x => new
-        {
-            x.SubjectId,
-            subjectName = x.Subject.Name
-        })
-        .Distinct()
-        .ToListAsync();
-
-    if (!isClassTeacher && teacherClassSubjects.Count == 0)
-    {
-        return (
-            false,
-            null,
-            "You are not the class teacher or a subject teacher of this student's class."
-        );
-    }
-
-    var teacherSubjectIds = teacherClassSubjects
-        .Select(x => x.SubjectId)
-        .ToList();
-
-    // ============================================================
-    // RESULTS
-    // ============================================================
-    // Class teacher → every subject (they oversee the whole class).
-    // Subject teacher only → just the subjects they teach.
-
-    var results = await _context.StudentResults
-        .AsNoTracking()
-        .Where(result =>
-            result.StudentId == studentId &&
-            result.SchoolId == teacher.SchoolId &&
-            (isClassTeacher || teacherSubjectIds.Contains(result.SubjectId)))
-        .Select(result => new
-        {
-            ResultId = result.Id,
-            SubjectId = result.SubjectId,
-            SubjectName = result.Subject.Name,
-            Session = result.Session,
-            Term = result.Term,
-            Score = result.Score,
-            TestScore = result.TestScore,
-            ExamScore = result.ExamScore,
-            Grade = result.Grade,
-            GradeRemark = result.GradeRemark,
-            Remark = result.Remark,
-            CreatedAt = result.CreatedAt
-        })
-        .OrderByDescending(x => x.CreatedAt)
-        .ToListAsync();
-
-    // ============================================================
-    // ATTENDANCE
-    // ============================================================
-    // Two separate types:
-    //   • Class attendance   (SubjectId == null) → class teacher only
-    //   • Subject attendance (SubjectId set)     → subjects this
-    //     teacher teaches in the class
-
-    var attendance = await _context.AttendanceRecords
-        .AsNoTracking()
-        .Where(record =>
-            record.StudentId == studentId &&
-            record.SchoolId == teacher.SchoolId &&
-            record.ClassId == student.classId &&
-            (
-                (isClassTeacher && record.SubjectId == null) ||
-                (record.SubjectId != null &&
-                 teacherSubjectIds.Contains(record.SubjectId.Value))
-            ))
-        .Select(record => new
-        {
-            attendanceId = record.Id,
-
-            type = record.SubjectId == null ? "Class" : "Subject",
-
-            subjectId = record.SubjectId,
-            subjectName = record.SubjectId != null
-                ? record.Subject!.Name
-                : null,
-
-            attendanceDate = record.AttendanceDate,
-            status = record.Status,
-            remarks = record.Remarks,
-
-            session = record.Session,
-            term = record.Term
-        })
-        .OrderByDescending(x => x.attendanceDate)
-        .ToListAsync();
-
-    // Rate = (Present + Late) / (Present + Absent + Late).
-    // Excused and Holiday don't count for or against the student.
-    object Summarise(IEnumerable<AttendanceStatus> statuses)
-    {
-        var list = statuses.ToList();
-
-        var present = list.Count(s => s == AttendanceStatus.Present);
-        var absent = list.Count(s => s == AttendanceStatus.Absent);
-        var late = list.Count(s => s == AttendanceStatus.Late);
-        var excused = list.Count(s => s == AttendanceStatus.Excused);
-        var holiday = list.Count(s => s == AttendanceStatus.Holiday);
-
-        var counted = present + absent + late;
-
-        return new
-        {
-            total = list.Count,
-            present,
-            absent,
-            late,
-            excused,
-            holiday,
-            percentage = counted == 0
-                ? (double?)null
-                : Math.Round((double)(present + late) / counted * 100, 2)
-        };
-    }
-
-    var classRecords = attendance.Where(x => x.subjectId == null).ToList();
-    var subjectRecords = attendance.Where(x => x.subjectId != null).ToList();
-
-    // ============================================================
-    // ASSIGNMENTS
-    // ============================================================
-    // Class teacher → every assignment in the class.
-    // Subject teacher only → their subjects.
-    // Each one shows this student's submission, if any.
-
-    var assignments = await _context.Assignments
-        .AsNoTracking()
-        .Where(assignment =>
-            assignment.ClassId == student.classId &&
-            assignment.SchoolId == teacher.SchoolId &&
-            (isClassTeacher || teacherSubjectIds.Contains(assignment.SubjectId)))
-        .Select(assignment => new
-        {
-            assignmentId = assignment.Id,
-
-            subjectId = assignment.SubjectId,
-            subjectName = assignment.Subject.Name,
-
-            title = assignment.Title,
-            description = assignment.Description,
-            attachmentUrl = assignment.AttachmentUrl,
-
-            dueDate = assignment.DueDate,
-            isPublished = assignment.IsPublished,
-            createdAt = assignment.CreatedAt,
-
-            submission = assignment.Submissions
-                .Where(s => s.StudentId == studentId)
-                .Select(s => new
+                    x.SchoolId == teacher.SchoolId &&
+                    x.ClassId == profile.classId)
+                .Select(x => new
                 {
-                    s.Id,
-                    s.SubmittedAt,
-                    s.Score,
-                    s.IsGraded
+                    x.SubjectId,
+                    subjectName = x.Subject.Name,
+                    x.Subject.DepartmentId,
+                    x.Subject.TradeId
                 })
-                .FirstOrDefault()
-        })
-        .OrderByDescending(x => x.createdAt)
-        .ToListAsync();
+                .ToListAsync())
+            .Where(x => StudentTakesSubject(
+                x.SubjectId,
+                x.DepartmentId,
+                x.TradeId,
+                profile.DepartmentId,
+                profile.TradeId,
+                profile.TradeSubjectId))
+            .Select(x => new { x.SubjectId, x.subjectName })
+            .Distinct()
+            .ToList();
 
-    // ============================================================
-    // RESULT
-    // ============================================================
-
-    return (
-        true,
-        new
+        if (!isClassTeacher && teacherClassSubjects.Count == 0)
         {
-            student,
+            return (
+                false,
+                null,
+                "This student doesn't take any subject you teach."
+            );
+        }
 
-            isClassTeacher,
-            teacherSubjects = teacherClassSubjects,
+        var teacherSubjectIds = teacherClassSubjects
+            .Select(x => x.SubjectId)
+            .ToList();
 
-            results,
+        // Class teacher → all the student's subjects.
+        // Subject teacher → only the subjects they teach this student.
+        var visibleSubjectIds = isClassTeacher
+            ? studentSubjectIds.Union(teacherSubjectIds).ToList()
+            : teacherSubjectIds;
 
-            attendance = new
+        // ============================================================
+        // RESULTS
+        // ============================================================
+
+        var results = await _context.StudentResults
+            .AsNoTracking()
+            .Where(result =>
+                result.StudentId == studentId &&
+                result.SchoolId == teacher.SchoolId &&
+                (isClassTeacher || teacherSubjectIds.Contains(result.SubjectId)))
+            .Select(result => new
             {
-                // Everything this teacher can see (both types).
-                summary = Summarise(attendance.Select(x => x.status)),
+                ResultId = result.Id,
+                SubjectId = result.SubjectId,
+                SubjectName = result.Subject.Name,
+                Session = result.Session,
+                Term = result.Term,
+                Score = result.Score,
+                TestScore = result.TestScore,
+                ExamScore = result.ExamScore,
+                Grade = result.Grade,
+                GradeRemark = result.GradeRemark,
+                Remark = result.Remark,
+                CreatedAt = result.CreatedAt
+            })
+            .OrderByDescending(x => x.CreatedAt)
+            .ToListAsync();
 
-                // Class teacher's daily register.
-                classAttendance = isClassTeacher
-                    ? Summarise(classRecords.Select(x => x.status))
+        // ============================================================
+        // ATTENDANCE
+        // ============================================================
+        //   • Class register (SubjectId == null) → class teacher only
+        //   • Subject records → subjects I teach this student
+
+        var attendance = await _context.AttendanceRecords
+            .AsNoTracking()
+            .Where(record =>
+                record.StudentId == studentId &&
+                record.SchoolId == teacher.SchoolId &&
+                record.ClassId == profile.classId &&
+                (
+                    (isClassTeacher && record.SubjectId == null) ||
+                    (record.SubjectId != null &&
+                     teacherSubjectIds.Contains(record.SubjectId.Value))
+                ))
+            .Select(record => new
+            {
+                attendanceId = record.Id,
+
+                type = record.SubjectId == null ? "Class" : "Subject",
+
+                subjectId = record.SubjectId,
+                subjectName = record.SubjectId != null
+                    ? record.Subject!.Name
                     : null,
 
-                // This teacher's subject lessons.
-                subjectAttendance = teacherSubjectIds.Count > 0
-                    ? Summarise(subjectRecords.Select(x => x.status))
-                    : null,
+                attendanceDate = record.AttendanceDate,
+                status = record.Status,
+                remarks = record.Remarks,
 
-                records = attendance
+                session = record.Session,
+                term = record.Term
+            })
+            .OrderByDescending(x => x.attendanceDate)
+            .ToListAsync();
+
+        // Rate = (Present + Late) / (Present + Absent + Late).
+        object Summarise(IEnumerable<AttendanceStatus> statuses)
+        {
+            var list = statuses.ToList();
+
+            var present = list.Count(s => s == AttendanceStatus.Present);
+            var absent = list.Count(s => s == AttendanceStatus.Absent);
+            var late = list.Count(s => s == AttendanceStatus.Late);
+            var excused = list.Count(s => s == AttendanceStatus.Excused);
+            var holiday = list.Count(s => s == AttendanceStatus.Holiday);
+
+            var counted = present + absent + late;
+
+            return new
+            {
+                total = list.Count,
+                present,
+                absent,
+                late,
+                excused,
+                holiday,
+                percentage = counted == 0
+                    ? (double?)null
+                    : Math.Round((double)(present + late) / counted * 100, 2)
+            };
+        }
+
+        var classRecords = attendance.Where(x => x.subjectId == null).ToList();
+        var subjectRecords = attendance.Where(x => x.subjectId != null).ToList();
+
+        // ============================================================
+        // ASSIGNMENTS
+        // ============================================================
+        // Only subjects the student takes (so a Livestock assignment
+        // never shows for an Art student), limited further to the
+        // teacher's own subjects unless they're the class teacher.
+
+        var assignments = await _context.Assignments
+            .AsNoTracking()
+            .Where(assignment =>
+                assignment.ClassId == profile.classId &&
+                assignment.SchoolId == teacher.SchoolId &&
+                visibleSubjectIds.Contains(assignment.SubjectId))
+            .Select(assignment => new
+            {
+                assignmentId = assignment.Id,
+
+                subjectId = assignment.SubjectId,
+                subjectName = assignment.Subject.Name,
+
+                title = assignment.Title,
+                description = assignment.Description,
+                attachmentUrl = assignment.AttachmentUrl,
+
+                dueDate = assignment.DueDate,
+                isPublished = assignment.IsPublished,
+                createdAt = assignment.CreatedAt,
+
+                submission = assignment.Submissions
+                    .Where(s => s.StudentId == studentId)
+                    .Select(s => new
+                    {
+                        s.Id,
+                        s.SubmittedAt,
+                        s.Score,
+                        s.IsGraded
+                    })
+                    .FirstOrDefault()
+            })
+            .OrderByDescending(x => x.createdAt)
+            .ToListAsync();
+
+        // ============================================================
+        // RESULT
+        // ============================================================
+
+        return (
+            true,
+            new
+            {
+                student,
+
+                isClassTeacher,
+                teacherSubjects = teacherClassSubjects,
+
+                results,
+
+                attendance = new
+                {
+                    summary = Summarise(attendance.Select(x => x.status)),
+
+                    classAttendance = isClassTeacher
+                        ? Summarise(classRecords.Select(x => x.status))
+                        : null,
+
+                    subjectAttendance = teacherSubjectIds.Count > 0
+                        ? Summarise(subjectRecords.Select(x => x.status))
+                        : null,
+
+                    records = attendance
+                },
+
+                assignments
             },
-
-            assignments
-        },
-        null
-    );
-}
-
+            null
+        );
+    }
 
 
     // ================================================================

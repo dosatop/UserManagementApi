@@ -31,10 +31,11 @@ public interface ITeacherPortalService
     // STUDENTS
     // ================================================================
 
-    Task<(bool Success, object? Data, string? Error)>
+       Task<(bool Success, object? Data, string? Error)>
         GetStudentsAsync(
             string userId,
-            Guid? classId = null);
+            Guid? classId = null,
+            Guid? subjectId = null);
 
     Task<(bool Success, object? Data, string? Error)>
         GetStudentDetailsAsync(
