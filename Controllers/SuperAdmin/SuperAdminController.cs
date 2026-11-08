@@ -12,6 +12,7 @@ namespace UserManagementApi.Controllers;
 // SUPER ADMIN CONTROLLER
 // ====================================================================
 //   POST api/super-admin/schools/{schoolId}/admin
+//   GET  .../admins    PUT .../admins/{adminId}    DELETE .../admins/{adminId}
 //
 //   GET  api/super-admin/schools/{schoolId}/teachers
 //   POST api/super-admin/schools/{schoolId}/teachers
@@ -53,6 +54,21 @@ public class SuperAdminController(ISuperAdminService superAdminService)
         Guid schoolId,
         CreateSchoolAdminRequest request) =>
         ToResponse(await _service.CreateSchoolAdminAsync(schoolId, request));
+
+    [HttpGet("admins")]
+    public async Task<IActionResult> GetSchoolAdmins(Guid schoolId) =>
+        ToResponse(await _service.GetSchoolAdminsAsync(schoolId));
+
+    [HttpPut("admins/{adminId}")]
+    public async Task<IActionResult> UpdateSchoolAdmin(
+        Guid schoolId,
+        string adminId,
+        SuperAdminUpdateTeacherRequest request) =>
+        ToResponse(await _service.UpdateSchoolAdminAsync(schoolId, adminId, request));
+
+    [HttpDelete("admins/{adminId}")]
+    public async Task<IActionResult> DeleteSchoolAdmin(Guid schoolId, string adminId) =>
+        ToResponse(await _service.DeleteSchoolAdminAsync(schoolId, adminId));
 
     // ================================================================
     // TEACHERS

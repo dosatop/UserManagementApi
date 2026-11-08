@@ -94,4 +94,12 @@ public interface ISuperAdminService
 
     Task<SuperAdminResult> RemoveSubjectFromClassAsync(
         Guid schoolId, Guid subjectId, Guid classId);
+
+    // ---- School admins (SuperAdminService.Admins.cs) -----------------
+    Task<SuperAdminResult> GetSchoolAdminsAsync(Guid schoolId);
+
+    Task<SuperAdminResult> UpdateSchoolAdminAsync(
+        Guid schoolId, string adminId, SuperAdminUpdateTeacherRequest request);
+
+    Task<SuperAdminResult> DeleteSchoolAdminAsync(Guid schoolId, string adminId);
 }
