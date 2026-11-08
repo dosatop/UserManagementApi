@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using UserManagementApi.DTOs.Auth.Roles;
 using UserManagementApi.DTOs.SuperAdmin;
+using UserManagementApi.DTOs.Subjects;
 using UserManagementApi.DTOs.Users;
 using UserManagementApi.Services.Interfaces;
 
@@ -27,6 +28,11 @@ namespace UserManagementApi.Controllers;
 //   PUT    .../students/{studentId}    DELETE .../students/{studentId}
 //   PUT    .../classes/{classId}       DELETE .../classes/{classId}
 //   DELETE .../classes/{classId}/class-teacher
+//
+//   GET  .../subjects                 POST .../subjects
+//   PUT  .../subjects/{subjectId}     DELETE .../subjects/{subjectId}
+//   POST .../subjects/{subjectId}/classes            (assign to classes)
+//   DELETE .../subjects/{subjectId}/classes/{classId} (remove from class)
 //
 // Thin: all business logic lives in SuperAdminService.
 
@@ -140,6 +146,45 @@ public class SuperAdminController(ISuperAdminService superAdminService)
     [HttpDelete("classes/{classId:guid}/class-teacher")]
     public async Task<IActionResult> RemoveClassTeacher(Guid schoolId, Guid classId) =>
         ToResponse(await _service.RemoveClassTeacherAsync(schoolId, classId));
+
+    // ================================================================
+    // SUBJECTS
+    // ================================================================
+
+    [HttpGet("subjects")]
+    public async Task<IActionResult> GetSchoolSubjects(Guid schoolId) =>
+        ToResponse(await _service.GetSchoolSubjectsAsync(schoolId));
+
+    [HttpPost("subjects")]
+    public async Task<IActionResult> CreateSchoolSubject(
+        Guid schoolId,
+        CreateSubjectRequest request) =>
+        ToResponse(await _service.CreateSchoolSubjectAsync(schoolId, request));
+
+    [HttpPut("subjects/{subjectId:guid}")]
+    public async Task<IActionResult> UpdateSchoolSubject(
+        Guid schoolId,
+        Guid subjectId,
+        CreateSubjectRequest request) =>
+        ToResponse(await _service.UpdateSchoolSubjectAsync(schoolId, subjectId, request));
+
+    [HttpDelete("subjects/{subjectId:guid}")]
+    public async Task<IActionResult> DeleteSchoolSubject(Guid schoolId, Guid subjectId) =>
+        ToResponse(await _service.DeleteSchoolSubjectAsync(schoolId, subjectId));
+
+    [HttpPost("subjects/{subjectId:guid}/classes")]
+    public async Task<IActionResult> AssignSchoolSubject(
+        Guid schoolId,
+        Guid subjectId,
+        SuperAdminAssignSubjectRequest request) =>
+        ToResponse(await _service.AssignSchoolSubjectAsync(schoolId, subjectId, request));
+
+    [HttpDelete("subjects/{subjectId:guid}/classes/{classId:guid}")]
+    public async Task<IActionResult> RemoveSubjectFromClass(
+        Guid schoolId,
+        Guid subjectId,
+        Guid classId) =>
+        ToResponse(await _service.RemoveSubjectFromClassAsync(schoolId, subjectId, classId));
 
     // ================================================================
     // RESULT → HTTP

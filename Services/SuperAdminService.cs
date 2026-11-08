@@ -21,13 +21,15 @@ namespace UserManagementApi.Services;
 public partial class SuperAdminService(
     ApplicationDbContext context,
     UserManager<User> userManager,
-    IUserManagementService userManagementService)
+    IUserManagementService userManagementService,
+    ISubjectService subjectService)
     : ISuperAdminService
 {
     private readonly ApplicationDbContext _context = context;
     private readonly UserManager<User> _userManager = userManager;
     private readonly IUserManagementService _userManagementService =
         userManagementService;
+    private readonly ISubjectService _subjectService = subjectService;
 
     // ================================================================
     // CREATE SCHOOL ADMIN
@@ -262,7 +264,9 @@ public partial class SuperAdminService(
                 tradeName = _context.Trades
                     .Where(tr => tr.Id == s.TradeId)
                     .Select(tr => tr.Name)
-                    .FirstOrDefault()
+                    .FirstOrDefault(),
+
+                tradeSubjectId = s.TradeSubjectId
             })
             .OrderBy(s => s.className)
             .ThenBy(s => s.fullName)

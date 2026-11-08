@@ -114,3 +114,18 @@ public class SuperAdminUpdateClassRequest
     [Required, MaxLength(100)]
     public string Name { get; set; } = string.Empty;
 }
+
+// ====================================================================
+// SUBJECTS
+// ====================================================================
+// Create / update reuse your existing CreateSubjectRequest
+// (UserManagementApi.DTOs.Subjects).
+
+public class SuperAdminAssignSubjectRequest
+{
+    [Required, MinLength(1)]
+    public List<Guid> ClassIds { get; set; } = [];
+
+    /// Optional — also make this teacher teach it in those classes.
+    public Guid? TeacherId { get; set; }
+}
