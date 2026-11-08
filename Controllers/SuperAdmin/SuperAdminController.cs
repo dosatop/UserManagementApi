@@ -23,6 +23,11 @@ namespace UserManagementApi.Controllers;
 //
 //   GET  api/super-admin/schools/{schoolId}/options    (departments + trades)
 //
+//   PUT    .../teachers/{teacherId}    DELETE .../teachers/{teacherId}
+//   PUT    .../students/{studentId}    DELETE .../students/{studentId}
+//   PUT    .../classes/{classId}       DELETE .../classes/{classId}
+//   DELETE .../classes/{classId}/class-teacher
+//
 // Thin: all business logic lives in SuperAdminService.
 
 [ApiController]
@@ -94,6 +99,47 @@ public class SuperAdminController(ISuperAdminService superAdminService)
     [HttpGet("options")]
     public async Task<IActionResult> GetSchoolFormOptions(Guid schoolId) =>
         ToResponse(await _service.GetSchoolFormOptionsAsync(schoolId));
+
+    // ================================================================
+    // EDIT / DELETE
+    // ================================================================
+
+    [HttpPut("teachers/{teacherId:guid}")]
+    public async Task<IActionResult> UpdateSchoolTeacher(
+        Guid schoolId,
+        Guid teacherId,
+        SuperAdminUpdateTeacherRequest request) =>
+        ToResponse(await _service.UpdateSchoolTeacherAsync(schoolId, teacherId, request));
+
+    [HttpDelete("teachers/{teacherId:guid}")]
+    public async Task<IActionResult> DeleteSchoolTeacher(Guid schoolId, Guid teacherId) =>
+        ToResponse(await _service.DeleteSchoolTeacherAsync(schoolId, teacherId));
+
+    [HttpPut("students/{studentId:guid}")]
+    public async Task<IActionResult> UpdateSchoolStudent(
+        Guid schoolId,
+        Guid studentId,
+        SuperAdminUpdateStudentRequest request) =>
+        ToResponse(await _service.UpdateSchoolStudentAsync(schoolId, studentId, request));
+
+    [HttpDelete("students/{studentId:guid}")]
+    public async Task<IActionResult> DeleteSchoolStudent(Guid schoolId, Guid studentId) =>
+        ToResponse(await _service.DeleteSchoolStudentAsync(schoolId, studentId));
+
+    [HttpPut("classes/{classId:guid}")]
+    public async Task<IActionResult> UpdateSchoolClass(
+        Guid schoolId,
+        Guid classId,
+        SuperAdminUpdateClassRequest request) =>
+        ToResponse(await _service.UpdateSchoolClassAsync(schoolId, classId, request));
+
+    [HttpDelete("classes/{classId:guid}")]
+    public async Task<IActionResult> DeleteSchoolClass(Guid schoolId, Guid classId) =>
+        ToResponse(await _service.DeleteSchoolClassAsync(schoolId, classId));
+
+    [HttpDelete("classes/{classId:guid}/class-teacher")]
+    public async Task<IActionResult> RemoveClassTeacher(Guid schoolId, Guid classId) =>
+        ToResponse(await _service.RemoveClassTeacherAsync(schoolId, classId));
 
     // ================================================================
     // RESULT → HTTP

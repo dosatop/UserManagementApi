@@ -39,6 +39,15 @@ public interface ISuperAdminService
         Guid schoolId,
         SuperAdminCreateTeacherRequest request);
 
+    Task<SuperAdminResult> UpdateSchoolTeacherAsync(
+        Guid schoolId,
+        Guid teacherId,
+        SuperAdminUpdateTeacherRequest request);
+
+    Task<SuperAdminResult> DeleteSchoolTeacherAsync(
+        Guid schoolId,
+        Guid teacherId);
+
     // ---- Students ---------------------------------------------------
     Task<SuperAdminResult> GetSchoolStudentsAsync(
         Guid schoolId,
@@ -48,12 +57,34 @@ public interface ISuperAdminService
         Guid schoolId,
         SuperAdminCreateStudentRequest request);
 
+    Task<SuperAdminResult> UpdateSchoolStudentAsync(
+        Guid schoolId,
+        Guid studentId,
+        SuperAdminUpdateStudentRequest request);
+
+    Task<SuperAdminResult> DeleteSchoolStudentAsync(
+        Guid schoolId,
+        Guid studentId);
+
     // ---- Classes ----------------------------------------------------
     Task<SuperAdminResult> GetSchoolClassesAsync(Guid schoolId);
 
     Task<SuperAdminResult> CreateSchoolClassAsync(
         Guid schoolId,
         SuperAdminCreateClassRequest request);
+
+    Task<SuperAdminResult> UpdateSchoolClassAsync(
+        Guid schoolId,
+        Guid classId,
+        SuperAdminUpdateClassRequest request);
+
+    Task<SuperAdminResult> DeleteSchoolClassAsync(
+        Guid schoolId,
+        Guid classId);
+
+    Task<SuperAdminResult> RemoveClassTeacherAsync(
+        Guid schoolId,
+        Guid classId);
 
     // ---- Form options (Add student form) ----------------------------
     // Departments, trades and each trade's subjects.

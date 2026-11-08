@@ -18,7 +18,7 @@ namespace UserManagementApi.Services;
 // Register in Program.cs:
 //   builder.Services.AddScoped<ISuperAdminService, SuperAdminService>();
 
-public class SuperAdminService(
+public partial class SuperAdminService(
     ApplicationDbContext context,
     UserManager<User> userManager,
     IUserManagementService userManagementService)
