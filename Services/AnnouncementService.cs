@@ -501,49 +501,54 @@ public class AnnouncementService(
     }
 
     /// Everyone the announcement is meant for (author excluded).
+    /// People are found through their profiles (StudentProfiles,
+    /// Teachers, Parents), because those always carry the SchoolId —
+    /// the User row of a student or parent may not.
     private async Task<List<string>> RecipientUserIdsAsync(Announcement a)
     {
         var roles = RolesFor(a.Audience);
+        var schoolId = a.SchoolId;
         var ids = new HashSet<string>();
 
+        // ---- which students are in scope -------------------------------
+        var students = _context.StudentProfiles.AsQueryable();
+
         if (a.ClassId.HasValue)
+            students = students.Where(s => s.ClassId == a.ClassId.Value);
+        else if (schoolId.HasValue)
+            students = students.Where(s => s.SchoolId == schoolId.Value);
+
+        // ---- students ----------------------------------------------------
+        if (roles.Contains(Roles.Student))
+            ids.UnionWith(await students.Select(s => s.UserId).ToListAsync());
+
+        // ---- parents (of those students, plus parents of the school) ----
+        if (roles.Contains(Roles.Parent))
         {
-            var classId = a.ClassId.Value;
+            ids.UnionWith(await ParentUserIdsOfStudents(students.Select(s => s.Id)).ToListAsync());
 
-            var studentIds = _context.StudentProfiles
-                .Where(s => s.ClassId == classId)
-                .Select(s => s.Id);
-
-            if (roles.Contains(Roles.Student))
-                ids.UnionWith(await _context.StudentProfiles
-                    .Where(s => s.ClassId == classId)
-                    .Select(s => s.UserId)
+            if (!a.ClassId.HasValue)
+                ids.UnionWith(await _context.Parents
+                    .Where(p => schoolId == null || p.SchoolId == schoolId)
+                    .Select(p => p.UserId)
                     .ToListAsync());
-
-            if (roles.Contains(Roles.Parent))
-                ids.UnionWith(await ParentUserIdsOfStudents(studentIds).ToListAsync());
-
-            if (roles.Contains(Roles.Teacher))
-                ids.UnionWith(await TeacherUserIdsOfClassAsync(classId));
-
-            if (roles.Contains(Roles.Admin) && a.SchoolId.HasValue)
-                ids.UnionWith(await UsersInRolesQuery([Roles.Admin], a.SchoolId).ToListAsync());
         }
-        else
+
+        // ---- teachers ----------------------------------------------------
+        if (roles.Contains(Roles.Teacher))
         {
-            ids.UnionWith(await UsersInRolesQuery(roles, a.SchoolId).ToListAsync());
-
-            // Parents may not have a SchoolId on their account — reach
-            // them through their children too.
-            if (roles.Contains(Roles.Parent))
-            {
-                var studentIds = _context.StudentProfiles
-                    .Where(s => a.SchoolId == null || s.SchoolId == a.SchoolId)
-                    .Select(s => s.Id);
-
-                ids.UnionWith(await ParentUserIdsOfStudents(studentIds).ToListAsync());
-            }
+            if (a.ClassId.HasValue)
+                ids.UnionWith(await TeacherUserIdsOfClassAsync(a.ClassId.Value));
+            else
+                ids.UnionWith(await _context.Teachers
+                    .Where(t => schoolId == null || t.SchoolId == schoolId)
+                    .Select(t => t.UserId)
+                    .ToListAsync());
         }
+
+        // ---- school admins ----------------------------------------------
+        if (roles.Contains(Roles.Admin))
+            ids.UnionWith(await UsersInRolesQuery([Roles.Admin], schoolId).ToListAsync());
 
         ids.Remove(a.CreatedById);
         return ids.ToList();
@@ -782,7 +787,23 @@ public class AnnouncementService(
         string[] order = [Roles.SuperAdmin, Roles.Admin, Roles.Teacher, Roles.Parent, Roles.Student];
         var role = order.FirstOrDefault(roles.Contains) ?? roles.FirstOrDefault() ?? string.Empty;
 
-        return new Caller(user.Id, role, user.SchoolId, user.FullName ?? "Someone");
+        // Students / teachers / parents may have the school only on their
+        // profile, not on the User row.
+        var schoolId = user.SchoolId;
+
+        if (schoolId == null && role == Roles.Teacher)
+            schoolId = await _context.Teachers.Where(t => t.UserId == userId)
+                .Select(t => (Guid?)t.SchoolId).FirstOrDefaultAsync();
+
+        if (schoolId == null && role == Roles.Student)
+            schoolId = await _context.StudentProfiles.Where(x => x.UserId == userId)
+                .Select(x => (Guid?)x.SchoolId).FirstOrDefaultAsync();
+
+        if (schoolId == null && role == Roles.Parent)
+            schoolId = await _context.Parents.Where(p => p.UserId == userId)
+                .Select(p => (Guid?)p.SchoolId).FirstOrDefaultAsync();
+
+        return new Caller(user.Id, role, schoolId, user.FullName ?? "Someone");
     }
 
     private IQueryable<string> UsersInRolesQuery(string[] roleNames, Guid? schoolId) =>
