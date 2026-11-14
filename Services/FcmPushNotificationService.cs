@@ -73,8 +73,7 @@ public class FcmPushNotificationService(
                     Notification = new AndroidNotification
                     {
                         Sound = "default",
-                        ClickAction = "FLUTTER_NOTIFICATION_CLICK"
-                    }
+                                            }
                 },
                 Apns = new ApnsConfig
                 {
