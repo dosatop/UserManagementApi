@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using UserManagementApi.Models;
+using UserManagementApi.Models.Announcements;
 using UserManagementApi.Models.Assignments;
 using UserManagementApi.Models.AuthModels;
 using UserManagementApi.Models.Results;
@@ -98,6 +99,16 @@ public class ApplicationDbContext(
 
     public DbSet<AttendanceRecord> AttendanceRecords { get; set; } = null!;
 
+
+    // ================================================================
+    // ANNOUNCEMENTS + PUSH DEVICES
+    // ================================================================
+
+    public DbSet<Announcement> Announcements { get; set; } = null!;
+
+    public DbSet<AnnouncementRead> AnnouncementReads { get; set; } = null!;
+
+    public DbSet<DeviceToken> DeviceTokens { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -696,6 +707,54 @@ public class ApplicationDbContext(
             })
             .IsUnique();
 
-    }
 
+        // ============================================================
+        // ANNOUNCEMENTS
+        // ============================================================
+
+        builder.Entity<Announcement>(e =>
+        {
+            e.Property(x => x.Title).HasMaxLength(200).IsRequired();
+            e.Property(x => x.Body).HasMaxLength(5000).IsRequired();
+            e.Property(x => x.CreatedById).HasMaxLength(450).IsRequired();
+            e.Property(x => x.CreatedByName).HasMaxLength(200);
+            e.Property(x => x.CreatedByRole).HasMaxLength(50);
+
+            e.HasIndex(x => new { x.SchoolId, x.CreatedAt });
+            e.HasIndex(x => x.ClassId);
+            e.HasIndex(x => x.CreatedById);
+
+            // Deleting a school / class removes its announcements.
+            e.HasOne(x => x.School).WithMany()
+                .HasForeignKey(x => x.SchoolId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(x => x.Class).WithMany()
+                .HasForeignKey(x => x.ClassId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<AnnouncementRead>(e =>
+        {
+            e.Property(x => x.UserId).HasMaxLength(450).IsRequired();
+
+            // One "read" row per user per announcement.
+            e.HasIndex(x => new { x.AnnouncementId, x.UserId }).IsUnique();
+            e.HasIndex(x => x.UserId);
+
+            e.HasOne(x => x.Announcement).WithMany(a => a.Reads)
+                .HasForeignKey(x => x.AnnouncementId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<DeviceToken>(e =>
+        {
+            e.Property(x => x.UserId).HasMaxLength(450).IsRequired();
+            e.Property(x => x.Token).HasMaxLength(512).IsRequired();
+            e.Property(x => x.Platform).HasMaxLength(20);
+
+            e.HasIndex(x => x.Token).IsUnique();
+            e.HasIndex(x => x.UserId);
+        });
+    }
 }

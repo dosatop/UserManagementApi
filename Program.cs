@@ -12,8 +12,28 @@ using UserManagementApi.Services.Interfaces;
 using UserManagementApi.Configuration;
 using Quartz;
 using System.Text.Json.Serialization;
+using FirebaseAdmin;
+using Google.Apis.Auth.OAuth2;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ---- Firebase (push notifications) ---------------------------------
+// Put the whole service-account JSON in one env var on Render:
+//   FIREBASE_CREDENTIALS_JSON = { "type": "service_account", ... }
+// Without it the API still runs; pushes are just skipped.
+var firebaseJson =
+    builder.Configuration["Firebase:CredentialsJson"] ??
+    Environment.GetEnvironmentVariable("FIREBASE_CREDENTIALS_JSON");
+
+if (!string.IsNullOrWhiteSpace(firebaseJson) && FirebaseApp.DefaultInstance == null)
+{
+    // Only accepts a service-account key, which is what Firebase gives you.
+    var credential = CredentialFactory
+        .FromJson<ServiceAccountCredential>(firebaseJson)
+        .ToGoogleCredential();
+
+    FirebaseApp.Create(new AppOptions { Credential = credential });
+}
 
 builder.Services
     .AddControllers()
@@ -166,6 +186,12 @@ builder.Services.AddQuartzHostedService(options =>
 
 builder.Services.Configure<SeedAdminSettings>(
     builder.Configuration.GetSection("SeedAdmin"));
+
+     
+// ---- Announcements ---------------------------------------------------
+builder.Services.AddScoped<IPushNotificationService, FcmPushNotificationService>();
+builder.Services.AddScoped<IAnnouncementService, AnnouncementService>();
+ 
 
 var app = builder.Build();
 
